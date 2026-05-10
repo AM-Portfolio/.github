@@ -1,0 +1,19 @@
+name: Global PR Agent
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+
+jobs:
+  pr_agent:
+    permissions:
+      issues: write
+      pull-requests: write
+      contents: write
+    # Call the reusable brain in am-pipelines
+    uses: AM-Portfolio/am-pipelines/.github/workflows/reusable-pr-agent.yml@main
+    with:
+      model: "gemini-1.5-flash"
+    secrets:
+      GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+      GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GHCR_TOKEN }}
