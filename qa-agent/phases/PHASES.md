@@ -1,6 +1,6 @@
 # Phased rollout
 
-**QA** + **spt-agent extract**. Orchestration remains in support-agent for all phases.
+**qa-agent extract.** Orchestration remains in support-agent for all phases.
 
 ---
 
@@ -9,50 +9,50 @@
 | Deliverable | Location |
 |-------------|----------|
 | Keep plan | `.github/qa-agent/` |
-| spt-agent extract spec | [agents/spt-agent.md](../agents/spt-agent.md) |
+| qa-agent extract spec | [agents/qa-agent.md](../agents/qa-agent.md) |
 
 **Exit:** Review checklist in PLAN.md signed off.
 
 ---
 
-## Phase 1 — Scaffold `spt-agent/`
+## Phase 1 — Scaffold `am-agents/qa-agent/`
 
 | Task | Owner |
 |------|-------|
-| Create `am-agents/spt-agent/` module (app, Dockerfile, Helm) | spt-agent |
-| HTTP API: prepare / execute / status / cancel | spt-agent |
-| Engines: memory + k6 stub (sandbox gate) | spt-agent |
-| Contract tests | spt-agent |
-| Draft ADR-006 extract | docs |
-| Registry entry (not yet live traffic) | support-agent |
+| Create module (app, Dockerfile, Helm) | qa-agent |
+| HTTP API: execute / status / cancel | qa-agent |
+| Runners: backend + network (pilot) | qa-agent |
+| Contract tests | qa-agent |
+| Draft ADR-006 qa-agent extract | docs |
+| Registry entry (not yet live) | support-agent |
 
-**Exit:** spt-agent pod healthy; contract tests green; **no orchestration code in module**.
+**Exit:** qa-agent pod healthy; contract tests green; **no orchestration code in module**.
 
 ---
 
-## Phase 2 — Wire support-agent → spt-agent
+## Phase 2 — Wire support-agent → qa-agent
 
 | Task | Owner |
 |------|-------|
-| Adapter `adapters/spt_agent/` | support-agent |
-| Retarget `activities/spt.py` capability calls to spt-agent HTTP | support-agent |
-| Dual-run parity vs `tool-agent/tools/spt/` | both |
-| Enable `SUPPORT_AGENT_SPT_PARITY` in staging against spt-agent | ops |
+| Adapter `adapters/qa_agent/` | support-agent |
+| `QaRunWorkflow` + activities | support-agent |
+| `catalog/qa/` sample backend/network entries | catalog |
+| Staging pilot demand | ops |
 
-**Exit:** Staging SPT demand completes via spt-agent; parity report accepted.
+**Exit:** Staging QA demand completes via qa-agent for pilot targets.
 
 ---
 
-## Phase 3 — Cutover + QA surface
+## Phase 3 — PR surface + remaining domains
 
 | Task | Owner |
 |------|-------|
-| Deprecate / remove `tool-agent/tools/spt/` | tool-agent |
-| PR / `/spt` trigger via am-pipelines | am-pipelines |
+| PR / `/qa` via am-pipelines | am-pipelines |
+| System runner + catalog entries | qa-agent + catalog |
+| Frontend routing decision executed | support-agent router |
 | Optional observe/verify via tool-agent | support-agent |
-| `catalog/qa/` functional domains (parallel track) | catalog + support-agent |
 
-**Exit:** Production SPT path uses spt-agent only; tool-agent SPT plugin gone.
+**Exit:** PR-triggered QA comment + labels on pilot repo.
 
 ---
 
@@ -64,7 +64,7 @@
 | Optional LLM scope in **support-agent only** | support-agent |
 | Flaky / risk-based selection | support-agent |
 
-**Exit:** Metrics live; spt-agent still execute-only.
+**Exit:** Metrics live; qa-agent still execute-only.
 
 ---
 
@@ -74,13 +74,13 @@
 Phase 0 review
     │
     ▼
-Phase 1 spt-agent scaffold
+Phase 1 qa-agent scaffold
     │
     ▼
-Phase 2 support-agent → spt-agent
+Phase 2 support-agent → qa-agent
     │
     ▼
-Phase 3 cutover + PR
+Phase 3 PR + domains
     │
     ▼
 Phase 4 intelligence (orchestrator only)
@@ -88,10 +88,10 @@ Phase 4 intelligence (orchestrator only)
 
 ---
 
-## Out of scope forever (for spt-agent module)
+## Out of scope forever (for qa-agent module)
 
-- Temporal workflows inside spt-agent  
+- Temporal workflows inside qa-agent  
 - Selector expand / fan-out  
 - Parent RunStore ownership  
-- Calling other specialists  
-- Becoming QA orchestrator  
+- Calling other specialists as orchestrator  
+- Becoming the platform orchestrator  

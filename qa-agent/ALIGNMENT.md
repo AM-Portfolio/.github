@@ -1,6 +1,6 @@
 # Alignment with `am-agents`
 
-How this plan maps to the platform — including **spt-agent extract**.
+How this plan maps to the platform — **qa-agent extract**.
 
 ---
 
@@ -8,10 +8,10 @@ How this plan maps to the platform — including **spt-agent extract**.
 
 | Decision | Detail |
 |----------|--------|
-| Extract SPT | New module `am-agents/spt-agent/` |
+| Extract QA | New module `am-agents/qa-agent/` |
 | Orchestration | **Only** in `support-agent/` |
-| Migrate from | `tool-agent/tools/spt/` → deprecate after parity |
-| Catalog | Stays in `catalog/spt/` (data); not inside spt-agent |
+| Catalog | `catalog/qa/` data — resolved by support-agent; **not** inside qa-agent |
+| SPT | **Not** extracted in this plan — keep existing SPT path |
 
 ---
 
@@ -20,80 +20,68 @@ How this plan maps to the platform — including **spt-agent extract**.
 | Role | Component | Notes |
 |------|-----------|-------|
 | Orchestrator | **support-agent** | Workflows, selector, fan-out, RunStore, verdict |
-| Load / perf execute | **spt-agent** ★ | prepare / execute / status / cancel |
-| Backend / network / observe | **tool-agent** | No long-term SPT ownership |
-| Frontend E2E | **ui-test-agent** | Unchanged |
+| QA execute | **qa-agent** ★ | execute / status / cancel |
+| Frontend E2E | **ui-test-agent** (and/or qa-agent) | Open decision |
+| Observe / tools / SPT | **tool-agent** | Existing |
 | Data checks | **db-agent** | Optional |
 | Finance | **fin-agent** | Out of scope |
 
 ---
 
-## What already exists
+## What already exists vs net new
 
-| Capability | Location | After extract |
-|------------|----------|---------------|
-| `SptRunWorkflow` | support-agent | Keep — retarget calls to spt-agent |
-| SPT activities | support-agent `activities/spt.py` | Keep — HTTP to spt-agent |
-| SPT plugin | tool-agent `tools/spt/` | **Migrate then deprecate** |
-| `catalog/spt/` | catalog/ | Unchanged (data) |
-| ADR-004 selectors | docs | Unchanged — enforced in support-agent |
-| Registry | support-agent `agents.yaml` | **Add spt-agent** |
-
----
-
-## Net new
-
-| Item | Phase |
-|------|-------|
-| `spt-agent/` module | 1 |
-| support-agent adapter `spt_agent/` | 2 |
-| Registry entry + env `SPT_AGENT_BASE_URL` | 1–2 |
-| ADR-006 spt-agent extract | 1 |
-| Deprecate tool-agent spt plugin | 3 |
-| `catalog/qa/` functional matrix | 1–2 (parallel) |
+| Item | Status |
+|------|--------|
+| support-agent orchestration | Exists — extend with QaRun |
+| ui-test-agent / tool-agent | Exists |
+| `catalog/spt/` + SptRunWorkflow | Exists — leave as-is |
+| **`am-agents/qa-agent/`** | **New** |
+| `catalog/qa/` | New (data) |
+| support-agent adapter `qa_agent/` | New |
+| Registry entry `qa-agent` | New |
 
 ---
 
-## Specialist routing (target registry)
+## Specialist routing (target)
 
 ```yaml
 agents:
-  - agent_id: tool-agent      # backend, network, observe
+  - agent_id: qa-agent        # QA execute ★ NEW
   - agent_id: ui-test-agent   # frontend E2E
-  - agent_id: spt-agent       # load / perf ★ NEW
+  - agent_id: tool-agent      # observe / tools / SPT plugin
   - agent_id: db-agent        # optional data
 ```
 
 ---
 
-## PR → SPT path (after extract)
+## PR → QA path (after extract)
 
 ```text
 PR / demand
   → support-agent (orchestrate)
-      → spt-agent (execute k6)
-      → tool-agent (optional observe)
+      → qa-agent (execute cases)
+      → ui-test-agent / tool-agent (as routed)
   → support-agent (verdict + PR comment)
 ```
 
-LLM: not required on happy path. Optional later only in support-agent planner / narrative.
+LLM: not required on happy path. Optional later only in support-agent.
 
 ---
 
-## v2 → v3 corrections
+## Corrections from earlier drafts
 
-| Earlier plan | This revision |
-|--------------|---------------|
-| SPT via tool-agent `tools/spt/` | Extract **spt-agent** module |
-| Perf listed under tool-agent | Perf = **spt-agent** only |
-| Orchestration ambiguity | Explicit: **all orchestration out** of spt-agent |
+| Earlier | This revision |
+|---------|---------------|
+| Extract **spt-agent** | Extract **qa-agent** instead |
+| Perf as primary extract | SPT path unchanged for now |
+| Orchestration ambiguity | Explicit: **all orchestration out** of qa-agent |
 
 ---
 
 ## Review sign-off
 
-1. Confirm extract `spt-agent/`  
+1. Confirm extract `am-agents/qa-agent/`  
 2. Confirm orchestration **only** in support-agent  
-3. Confirm deprecate `tool-agent/tools/spt/` after parity  
-4. Confirm catalog stays outside spt-agent  
+3. Confirm catalog stays outside qa-agent  
+4. Decide frontend routing (ui-test vs qa-agent)  
 5. Approve phases in [phases/PHASES.md](./phases/PHASES.md)  

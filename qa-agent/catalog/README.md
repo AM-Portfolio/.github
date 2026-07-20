@@ -8,9 +8,10 @@ Catalog holds **targets and check templates** — no Python logic (ADR-004, plat
 
 | Path | Purpose |
 |------|---------|
+| `catalog/qa/` | QA targets — **data**; resolved by **support-agent**; executed by **qa-agent** |
 | `catalog/verify/` | Metrics, logs, health check templates |
 | `catalog/prompts/` | Prompt bodies for agents |
-| `catalog/spt/` | Perf/load targets — **owned as data**; resolved by support-agent; executed by **spt-agent** |
+| `catalog/spt/` | Perf/load targets — existing SPT path (unchanged in this extract) |
 
 ---
 
@@ -27,10 +28,10 @@ catalog/qa/
 │   └── *.yaml                  # ui-test-agent scenario refs
 ├── system/
 │   └── *.yaml                  # multi-step journeys (fan-out)
-├── network/
-│   └── *.yaml                  # DNS, TLS, latency probes
-└── perf/
-    └── *.yaml                  # load/k6 scenario refs
+└── network/
+    └── *.yaml                  # DNS, TLS, latency probes
+
+# Note: perf/load stays in catalog/spt/ for existing SPT path unless later folded.
 ```
 
 ---

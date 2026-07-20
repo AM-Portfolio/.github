@@ -1,6 +1,6 @@
 # QA Agent — Keep Plan (Review Draft)
 
-Planning package for full-stack **QA** testing and extraction of **`spt-agent`** inside the AM-Portfolio agent ecosystem.
+Planning package for extracting **`qa-agent`** as a specialist module in AM-Portfolio.
 
 **Implementation home:** `AM-Portfolio/am-agents`  
 **This folder:** review-only keep plan — no code, no workflows.
@@ -12,48 +12,49 @@ Planning package for full-stack **QA** testing and extraction of **`spt-agent`**
 | Document | Read for |
 |----------|----------|
 | [PLAN.md](./PLAN.md) | Master strategy |
-| [FOLDER_STRUCTURE.md](./FOLDER_STRUCTURE.md) | Target layout incl. new `spt-agent/` |
+| [agents/qa-agent.md](./agents/qa-agent.md) | ★ Extract — execute only, no orchestration |
+| [FOLDER_STRUCTURE.md](./FOLDER_STRUCTURE.md) | Target layout in am-agents |
 | [ALIGNMENT.md](./ALIGNMENT.md) | Mapping to existing agents |
-| [agents/spt-agent.md](./agents/spt-agent.md) | SPT extract — execute only, no orchestration |
 
 ---
 
 ## Agent model
 
 ```
-Trigger (PR / QA or SPT demand / /qa)
+Trigger (PR / QA demand / /qa)
            │
            ▼
     support-agent          ← ALL orchestration (plan, route, verify, report)
      ┌─────┼──────┬────────┐
      │     │      │        │
-tool-agent  ui-test  spt-agent  db-agent
-(backend,   (E2E)   (load/perf) (optional)
- network,
- observe)
+ qa-agent  ui-test  tool-agent  db-agent
+ (QA exec) (E2E*)  (observe /   (optional)
+                    tools / SPT)
            │
            ▼
     RunStore + verdict
 ```
 
-**Decision:** Extract **`spt-agent`** as a new specialist module.  
-**Orchestration stays out** of spt-agent — only in **support-agent**.
+**Decision:** Extract **`qa-agent`** as a new specialist module.  
+**Orchestration stays out** of qa-agent — only in **support-agent**.
 
-**Note:** `fin-agent` is finance product — not part of QA/SPT.
+\* Frontend may route to ui-test-agent and/or qa-agent (open decision).
+
+**Note:** `fin-agent` is finance product — not part of QA.
 
 ---
 
 ## Folder index
 
 ```
-qa-agent/
+qa-agent/                         # this keep-plan folder (.github)
 ├── PLAN.md
 ├── FOLDER_STRUCTURE.md
 ├── ALIGNMENT.md
 ├── phases/PHASES.md
 ├── agents/
+│   ├── qa-agent.md               ★ extract spec
 │   ├── support-agent.md
-│   ├── spt-agent.md          ★ extract plan
 │   ├── tool-agent.md
 │   └── ui-test-agent.md
 ├── catalog/README.md

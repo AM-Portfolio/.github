@@ -2,52 +2,50 @@
 
 **Canonical name:** `support-agent`  
 **Path:** `am-agents/support-agent/`  
-**Role:** **All orchestration** for QA and SPT. Does not run k6.
+**Role:** **All orchestration** for QA. Does not run QA runners.
 
 ---
 
 ## Purpose
 
-1. Accept QA / SPT demand (selector + environment)
-2. Resolve targets from `catalog/spt/` / `catalog/qa/` / `catalog/verify/`
+1. Accept QA demand (selector + environment)
+2. Resolve targets from `catalog/qa/` (+ verify)
 3. Enforce policy (sandbox, max targets, empty selector fatal)
-4. Fan-out to specialists over HTTP
-5. Verify, Write RunStore, publish verdict
-
-For SPT load targets, the executor is **`spt-agent`** (extracted module) — not tool-agent long-term.
+4. Fan-out to specialists over HTTP — primarily **qa-agent**
+5. Verify, write RunStore, publish verdict
 
 ---
 
-## Existing assets
+## Assets to add / extend
 
-| Component | Path | Change for extract |
-|-----------|------|-------------------|
-| SPT workflow | `orchestrator/workflows/spt_run.py` | Keep — call spt-agent |
-| SPT activities | `orchestrator/activities/spt.py` | Retarget HTTP to spt-agent |
-| Catalog reader | `intelligence/catalog.py` | Unchanged ownership |
-| Registry | `registry/agents.yaml` | Add `spt-agent` |
-| Adapter | `adapters/spt_agent/` | **New** |
-| RunStore | `stores/` | Stays here |
+| Component | Change |
+|-----------|--------|
+| `workflows/qa_run.py` | New — orchestrates QA demand |
+| `activities/qa.py` | New — HTTP to qa-agent |
+| `adapters/qa_agent/` | New — client |
+| `registry/agents.yaml` | Add `qa-agent` |
+| RunStore | `kind=qa` stays here |
+
+SPT (`spt_run.py`) remains as today — not part of qa-agent extract.
 
 ---
 
-## SPT workflow (orchestration stays here)
+## QA workflow (orchestration stays here)
 
 ```text
-SptRunWorkflow
+QaRunWorkflow
   │
-  ├─ resolve_spt_catalog          (read-only, local)
+  ├─ resolve_qa_catalog           (local)
   ├─ expand_selector              (local)
   ├─ policy / sandbox gate        (local)
   ├─ for each target (bounded):
-  │     HTTP → spt-agent.prepare
-  │     HTTP → spt-agent.execute
-  │     HTTP → spt-agent.status
+  │     HTTP → qa-agent.execute / status
+  │     (optional) ui-test-agent / tool-agent
   ├─ optional: tool-agent observe
   └─ finalize RunStore + notify
 ```
 
-**Nothing above moves into spt-agent.**
+**Nothing above moves into qa-agent.**
 
 ---
 
@@ -55,26 +53,13 @@ SptRunWorkflow
 
 | Target kind | Route to |
 |-------------|----------|
-| perf / spt / load | **spt-agent** |
-| backend | tool-agent |
-| network | tool-agent |
+| backend / system / network | **qa-agent** |
+| frontend | ui-test-agent and/or qa-agent (open) |
 | verify / observe | tool-agent |
-| frontend | ui-test-agent |
-| data (optional) | db-agent |
+| perf / spt | existing SPT path (tool-agent spt plugin) |
+| data | db-agent |
 
-Auth to specialists: `X-Agent-Caller: support-agent`.
-
----
-
-## Budgets (orchestrator)
-
-```yaml
-max_fanout: 8
-max_latency_ms: 120000
-max_cost_units: 100
-```
-
-Fan-out limits apply in support-agent; spt-agent may add local pod concurrency caps.
+Auth: `X-Agent-Caller: support-agent`.
 
 ---
 
@@ -86,11 +71,9 @@ Fan-out limits apply in support-agent; spt-agent may add local pod concurrency c
 | Optional diff → tags | Phase 4 |
 | Optional PR narrative | Phase 4 |
 
-Never put secrets in prompts (ADR-002).
-
 ---
 
 ## References
 
-- [spt-agent.md](./spt-agent.md) — execute-only module  
+- [qa-agent.md](./qa-agent.md) — execute-only module  
 - [../PLAN.md](../PLAN.md)  
