@@ -2,7 +2,7 @@
 
 **Canonical name:** `tool-agent`  
 **Path:** `am-agents/tool-agent/`  
-**Role in QA:** Execute backend, network, SPT (load), and observe/verify checks.
+**Role in QA:** Execute backend, network, load/perf, and observe/verify checks.
 
 ---
 
@@ -22,7 +22,7 @@ Default port: **8141** (from `registry/agents.yaml`)
 | Backend API smoke | `tools.execute` + sandbox curl/HTTP | `catalog/qa/backend/` |
 | Backend test suites | `tools.execute` (allowed commands) | `catalog/qa/backend/` |
 | Network (DNS, TLS, latency) | `tools.execute` | `catalog/qa/network/` |
-| Performance (SPT) | `tools/spt/` capability plugin | `catalog/spt/` |
+| Performance (load) | `tools/spt/` capability plugin | `catalog/qa/perf/` |
 | Metrics / logs checks | `tools/observe/` | `catalog/verify/` |
 | Infra probes | grafana, vault, kafka, etc. | as needed |
 
@@ -82,14 +82,12 @@ support-agent passes resolved params; tool-agent executes inside sandbox.
 
 ---
 
-## SPT execution (exists)
+## Performance execution (reuse existing plugin)
 
-- Catalog: `catalog/spt/services/`, `catalog/spt/flows/`
-- Schema: `catalog/spt/target.schema.json`
-- Selectors: ADR-004 (`ids`, `tags` only)
-- Runner: k6 via ToolSandbox
+- Entries under `catalog/qa/perf/`
+- Runner: k6 via ToolSandbox (tool-agent `tools/spt/`)
 
-QA plan does **not** duplicate SPT — it **routes** SPT targets to the same plugin.
+QA plan routes perf targets through the same plugin — no duplicate runner.
 
 ---
 

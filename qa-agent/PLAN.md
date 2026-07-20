@@ -1,4 +1,4 @@
-# SPT / QA Agent — Keep Plan
+# QA Agent — Keep Plan
 
 > **Status:** Draft — for review  
 > **Owner:** AM-Portfolio Infrastructure Team  
@@ -9,18 +9,18 @@
 
 ## 1. Purpose
 
-Define how AM-Portfolio runs **all major testing** — backend, frontend, system, network, performance (SPT), and regression — using the existing agent platform:
+Define how AM-Portfolio runs **all major testing** — backend, frontend, system, network, performance, and regression — using the existing agent platform:
 
 | Agent | Role in QA |
 |-------|------------|
 | **support-agent** | Orchestrator — scope, route, verify, final verdict |
-| **tool-agent** | Execute backend, network, load (SPT), infra probes |
+| **tool-agent** | Execute backend, network, load/perf, infra probes |
 | **ui-test-agent** | Execute frontend / UI E2E (Playwright) |
 | **db-agent** | Optional data-layer checks during incidents |
 
 This plan **extends** what already exists in `am-agents`. It does **not** introduce a parallel orchestrator or duplicate specialist agents.
 
-> **Naming:** `fin-agent` (`am-fin-agent`) is the end-user **finance** agent. It is out of scope for QA/SPT unless a finance UI regression is explicitly in the test catalog.
+> **Naming:** `fin-agent` (`am-fin-agent`) is the end-user **finance** agent. It is out of scope for QA unless a finance UI regression is explicitly in the test catalog.
 
 ---
 
@@ -29,7 +29,7 @@ This plan **extends** what already exists in `am-agents`. It does **not** introd
 | Gap today | Impact |
 |-----------|--------|
 | PR Agent reviews code but does not run tests | Runtime bugs slip through |
-| SPT catalog + workflow exist but focus on load/perf | Full QA matrix not unified |
+| Load/perf catalog exists but is separate from functional QA | Full QA matrix not unified |
 | ui-test-agent, tool-agent, support-agent are separate | No single PR-triggered QA verdict |
 | Tests scattered across repos and CI jobs | Hard to know what ran and what blocked merge |
 
@@ -41,7 +41,7 @@ This plan **extends** what already exists in `am-agents`. It does **not** introd
 |------|------------------|
 | Unified QA orchestration | One demand → one verdict via support-agent |
 | Reuse existing specialists | No new tool-agent or ui-test-agent forks |
-| Full-stack coverage | Backend, frontend, system, network, SPT |
+| Full-stack coverage | Backend, frontend, system, network, performance |
 | Catalog-driven | Targets in `catalog/` — code never hardcodes service names (ADR-004) |
 | Safe by default | Sandbox, selectors, max fan-out, no prod writes |
 | Observable | RunStore steps, traces, evidence artifacts |
@@ -62,7 +62,7 @@ This plan **extends** what already exists in `am-agents`. It does **not** introd
 flowchart TB
     subgraph triggers [Triggers]
         PR[PR / synchronize]
-        SPT[SPT demand selector]
+        QA[QA demand selector]
         CMD["/qa comment"]
     end
 
@@ -80,8 +80,8 @@ flowchart TB
     end
 
     subgraph catalog [catalog/]
-        SPTC[spt/]
-        QA[qa/ planned]
+        PERF[perf/]
+        QAC[qa/ planned]
         VER[verify/]
     end
 
@@ -96,8 +96,8 @@ flowchart TB
 
 ### Request flow
 
-1. **Trigger** — PR event, `SptDemandRequest`, or `/qa` command.
-2. **Scope** — support-agent planner reads diff + `catalog/qa/` + `catalog/spt/` + `catalog/verify/`.
+1. **Trigger** — PR event, `QaDemandRequest`, or `/qa` command.
+2. **Scope** — support-agent planner reads diff + `catalog/qa/` + `catalog/verify/` (+ perf targets where applicable).
 3. **Resolve** — selector expands to target set (ADR-004: empty selector = fatal).
 4. **Route** — map each target to specialist via `registry/agents.yaml`.
 5. **Execute** — specialists run plan/execute; bounded parallelism (`max_fanout: 8`).
@@ -116,17 +116,17 @@ Detailed specs:
 
 ### 5.1 support-agent (orchestrator)
 
-- Owns `SptRunWorkflow` and future `QaRunWorkflow` (or extend SPT workflow with `kind: qa`)
+- Owns `QaRunWorkflow` (extend existing orchestrator workflows in support-agent)
 - Reads catalogs; never embeds service names in workflow code
 - Calls specialists over HTTP (A2A / capability contract)
-- Writes RunStore (`kind=spt` or `kind=qa`)
+- Writes RunStore (`kind=qa`)
 - Produces final `overall_status`: `succeeded` | `partial` | `failed` | `gated`
 
 ### 5.2 tool-agent (executor)
 
 - Backend: API smoke, contract checks, repo test commands via sandbox
 - Network: DNS, TLS, latency probes (declared hosts only)
-- SPT: k6 / load scenarios via existing `tools/spt` capability plugin
+- Performance: k6 / load scenarios via existing `tools/spt` capability plugin
 - Observe: metrics/logs checks via `tools/observe` + `catalog/verify/`
 
 ### 5.3 ui-test-agent (frontend executor)
@@ -146,9 +146,8 @@ Detailed specs:
 
 | Path | Purpose | Status in am-agents |
 |------|---------|---------------------|
-| `catalog/spt/` | Perf/load targets (services + flows) | **Exists** |
 | `catalog/verify/` | Health / metrics / log check templates | **Exists** |
-| `catalog/qa/` | QA test matrix by domain | **Planned** |
+| `catalog/qa/` | QA test matrix by domain (incl. perf refs) | **Planned** |
 | `catalog/prompts/` | Prompt bodies (not in Python) | **Exists** |
 
 ### Planned `catalog/qa/` shape
@@ -176,7 +175,7 @@ See [catalog/README.md](./catalog/README.md).
 | Frontend | ui-test-agent | `catalog/qa/frontend/` | Playwright E2E, a11y smoke |
 | System | support-agent fan-out | `catalog/qa/system/` | checkout → webhook journey |
 | Network | tool-agent | `catalog/qa/network/` | DNS, TLS, latency |
-| Performance (SPT) | tool-agent | `catalog/spt/` | k6, load policy |
+| Performance | tool-agent | `catalog/qa/perf/` | k6, load policy |
 | Verify | tool-agent + observe | `catalog/verify/` | health, metrics, logs |
 
 Full matrix: [testing-domains/overview.md](./testing-domains/overview.md).
@@ -189,10 +188,10 @@ See [contracts/README.md](./contracts/README.md).
 
 | Artifact | Producer | Consumer |
 |----------|----------|----------|
-| `SptDemandRequest` / `QaDemandRequest` | Gateway / PR trigger | support-agent workflow |
+| `QaDemandRequest` | Gateway / PR trigger | support-agent workflow |
 | `TargetSet` | TargetResolver | Router |
 | `ChildRunResult` | Specialists | support-agent verify |
-| `SptRunSummary` / `QaRunSummary` | support-agent | RunStore, notify, PR comment |
+| `QaRunSummary` | support-agent | RunStore, notify, PR comment |
 
 Reuse `am_platform_ports` schemas where possible — do not fork DTOs.
 
@@ -202,7 +201,6 @@ Reuse `am_platform_ports` schemas where possible — do not fork DTOs.
 
 | Trigger | Entry point | Phase |
 |---------|-------------|-------|
-| SPT demand (selector) | support-agent `SptRunWorkflow` | **Exists** (gated until parity on) |
 | PR opened / sync | `am-pipelines` reusable workflow → support-agent | Phase 2 |
 | `/qa`, `/qa backend`, `/qa full` | PR comment handler | Phase 2 |
 | Release gate | Manual workflow dispatch | Phase 3 |
@@ -231,7 +229,7 @@ See [phases/PHASES.md](./phases/PHASES.md).
 | Rule | Source |
 |------|--------|
 | Empty selector = fatal | ADR-004 |
-| `SPT_MAX_TARGETS_PER_RUN` default 20 (prod 5) | ADR-004 |
+| `QA_MAX_TARGETS_PER_RUN` default 20 (prod 5) | ADR-004 pattern |
 | Secrets via SecretBroker only — never in RunStore / LLM | ADR-002 |
 | Sandbox for tool-agent writes | Existing tool-agent safety |
 | `failure_mode: continue` default — partial-safe | ADR-004 |
@@ -256,11 +254,11 @@ Business labels: `business_domain`, `outcome`, `automation_mode` — no free-tex
 
 | # | Question | Options |
 |---|----------|---------|
-| 1 | Separate `QaRunWorkflow` vs extend `SptRunWorkflow` | A) extend with `kind` field · B) new workflow |
+| 1 | New `QaRunWorkflow` vs extend existing workflow | A) extend with `kind: qa` · B) dedicated workflow |
 | 2 | Where `catalog/qa/` lives | A) `am-agents/catalog/qa/` · B) per-repo catalog PR |
 | 3 | PR blocking policy | A) org opt-in · B) per-repo · C) advisory only |
 | 4 | Preview URL discovery | Vercel comment · deployment API · manual in demand |
-| 5 | When to enable `SUPPORT_AGENT_SPT_PARITY` | Staging cutover date TBD |
+| 5 | When to enable `SUPPORT_AGENT_QA_PARITY` | Staging cutover date TBD |
 
 ---
 
@@ -279,7 +277,7 @@ Business labels: `business_domain`, `outcome`, `automation_mode` — no free-tex
 | Resource | Link |
 |----------|------|
 | am-agents folder SoT | `docs/agent-platform/FOLDER_STRUCTURE.md` |
-| SPT ADR | `docs/agent-platform/decisions/ADR-004-spt-catalog-selectors.md` |
+| Catalog selectors ADR | `docs/agent-platform/decisions/ADR-004-spt-catalog-selectors.md` |
 | support-agent module | `support-agent/README.md` |
 | ui-test-agent | `ui-test-agent/README.md` |
 | PR Agent (this org) | `.github/workflows/pr-agent.yml` |

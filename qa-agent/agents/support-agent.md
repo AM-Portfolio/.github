@@ -6,12 +6,12 @@
 
 ---
 
-## Purpose in QA / SPT
+## Purpose in QA
 
-support-agent is the **only orchestrator** for QA. It:
+support-agent is the **only orchestrator** for the QA agent. It:
 
-1. Accepts QA or SPT demand (selector + environment)
-2. Resolves targets from `catalog/qa/` and `catalog/spt/`
+1. Accepts QA demand (selector + environment)
+2. Resolves targets from `catalog/qa/` and `catalog/verify/`
 3. Routes each target to the correct specialist
 4. Aggregates results with partial-failure rules (ADR-004)
 5. Writes RunStore and publishes verdict
@@ -24,8 +24,10 @@ It does **not** run Playwright, k6, or pytest directly.
 
 | Component | Path | QA extension |
 |-----------|------|--------------|
-| SPT workflow | `orchestrator/workflows/spt_run.py` | Add QA path or sibling `qa_run.py` |
-| SPT activities | `orchestrator/activities/spt.py` | Add `qa.py` activities |
+| QA workflow | `orchestrator/workflows/qa_run.py` | Planned |
+| QA activities | `orchestrator/activities/qa.py` | Planned |
+| Legacy perf workflow | `orchestrator/workflows/spt_run.py` | Exists — may merge into qa_run |
+| Legacy perf activities | `orchestrator/activities/spt.py` | Exists |
 | Catalog reader | `intelligence/catalog.py` | `list_qa()`, resolve QA selectors |
 | Router | `orchestrator/router.py` | Map QA target kind → specialist |
 | Registry | `registry/agents.yaml` | No change — already lists specialists |
@@ -36,7 +38,7 @@ It does **not** run Playwright, k6, or pytest directly.
 ## QA workflow (planned)
 
 ```text
-QaRunWorkflow (or SptRunWorkflow with demand.kind=qa)
+QaRunWorkflow
   │
   ├─ activity: resolve_qa_catalog     (read-only)
   ├─ activity: expand_selector        (TargetSet)
@@ -47,7 +49,7 @@ QaRunWorkflow (or SptRunWorkflow with demand.kind=qa)
   └─ activity: finalize_summary       (RunStore + notify)
 ```
 
-Gating: mirror `SUPPORT_AGENT_SPT_PARITY` with `SUPPORT_AGENT_QA_PARITY` until staging proven.
+Gating: `SUPPORT_AGENT_QA_PARITY` until staging proven.
 
 ---
 
@@ -92,7 +94,7 @@ max_latency_ms: 120000
 max_cost_units: 100
 ```
 
-QA runs must respect the same budgets as SPT.
+QA runs must respect the same budgets as other support-agent workflows.
 
 ---
 

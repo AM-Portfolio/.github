@@ -19,11 +19,11 @@ How this QA plan maps to the **existing** AM-Portfolio agent platform.
 
 | QA plan role | am-agents component | Notes |
 |--------------|---------------------|-------|
-| Orchestrator | **support-agent** | `SptRunWorkflow`, router, RunStore, A2A |
+| Orchestrator | **support-agent** | `QaRunWorkflow`, router, RunStore, A2A |
 | Scope / plan | **support-agent** `intelligence/` + `catalog/` | Was mislabeled "Fin Agent" in v1 plan |
 | Backend execute | **tool-agent** | plan/execute HTTP, sandbox |
 | Frontend execute | **ui-test-agent** | Playwright, baselines |
-| Network / load | **tool-agent** `tools/spt/` + `catalog/spt/` | ADR-004 selectors |
+| Load / performance | **tool-agent** `tools/spt/` + `catalog/qa/perf/` | ADR-004 selectors |
 | Health / metrics | **tool-agent** `tools/observe/` + `catalog/verify/` | check_ref templates |
 | Data checks | **db-agent** | Optional, incident-driven |
 | Final verdict | **support-agent** verify + RunStore | `overall_status`, notify |
@@ -36,10 +36,10 @@ How this QA plan maps to the **existing** AM-Portfolio agent platform.
 | Capability | Location | Status |
 |------------|----------|--------|
 | Specialist registry | `support-agent/registry/agents.yaml` | Live |
-| SPT catalog + schema | `catalog/spt/target.schema.json` | Live |
-| SPT workflow scaffold | `support-agent/.../workflows/spt_run.py` | Live (fan-out gated) |
-| SPT activities | `support-agent/.../activities/spt.py` | Live |
-| Tool-agent SPT plugin | `tool-agent/tools/spt/` | Live |
+| QA catalog + schema | `catalog/qa/` | Live (planned) |
+| QA workflow scaffold | `support-agent/.../workflows/qa_run.py` | Planned |
+| QA activities | `support-agent/.../activities/qa.py` | Planned |
+| Tool-agent perf plugin | `tool-agent/tools/spt/` | Live |
 | UI E2E agent | `ui-test-agent/` | Live |
 | Verify checks catalog | `catalog/verify/checks.yaml` | Live |
 | Platform ports (RunStore, SPT DTOs) | `libs/platform-ports/` | Live |
@@ -54,7 +54,7 @@ How this QA plan maps to the **existing** AM-Portfolio agent platform.
 | Item | Phase |
 |------|-------|
 | `catalog/qa/` — backend, frontend, system, network entries | 1 |
-| QA demand schema (`QaDemandRequest` or extend SPT) | 1 |
+| QA demand schema (`QaDemandRequest`) | 1 |
 | `qa_run` workflow or `kind: qa` on existing workflow | 2 |
 | PR trigger via `am-pipelines` | 2 |
 | `/qa` PR commands | 2 |
@@ -69,7 +69,7 @@ The first draft in this folder incorrectly used **"Fin Agent (Find + Finalize)"*
 
 | v1 (wrong) | v2 (this plan) |
 |------------|----------------|
-| New SPT/QA Orchestrator | **support-agent** |
+| New QA orchestrator package | **support-agent** |
 | Fin Agent = scope + verdict | **support-agent** planner + verify |
 | fin-agent in QA diagram | **Removed** — finance is separate |
 | Plan implies new executors | **tool-agent** + **ui-test-agent** |
@@ -95,17 +95,9 @@ QA catalog entries declare which capability to call — router resolves URL from
 
 ---
 
-## SPT vs QA
+## Performance vs functional QA
 
-| | SPT (exists) | QA (planned) |
-|---|-------------|--------------|
-| Focus | Load / performance | Functional + integration + regression |
-| Catalog | `catalog/spt/` | `catalog/qa/` |
-| Runner | k6 via tool-agent | pytest, curl, Playwright, probes |
-| Workflow | `SptRunWorkflow` | `QaRunWorkflow` or shared workflow |
-| ADR | ADR-004 | ADR-006 (planned) |
-
-Both share: selectors, RunStore, support-agent orchestration, partial-failure rules.
+Both live under **qa-agent** / `catalog/qa/`. Performance targets use `catalog/qa/perf/` and the existing tool-agent `spt` plugin. Selector and RunStore rules follow ADR-004.
 
 ---
 
@@ -115,7 +107,7 @@ Both share: selectors, RunStore, support-agent orchestration, partial-failure ru
 |---|----------------------------|----------------------|
 | Repo | `.github` + `am-pipelines` | `am-agents` |
 | Action | Code review, describe | Run tests, produce verdict |
-| Trigger | PR opened | PR + `/qa` + SPT demand |
+| Trigger | PR opened | PR + `/qa` + QA demand |
 | Model | Gemini 1.5 Flash | LLM optional in specialists |
 | Complementary | Yes — review + execute both |
 

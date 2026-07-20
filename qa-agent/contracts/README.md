@@ -9,9 +9,9 @@ Reuse **`am_platform_ports`** schemas where they exist. Do not fork DTOs in QA-s
 | Schema | Use in QA |
 |--------|-----------|
 | `SptDemandRequest` | Extend or mirror for QA demand |
-| `SptRunSummary` | Extend for QA summary |
+| `QaRunSummary` | QA summary |
 | `ChildRunResult` | Per-target specialist result |
-| RunStore `create_run(kind=...)` | `kind=spt` today; add `kind=qa` |
+| RunStore `create_run(kind=...)` | `kind=qa` |
 
 Location: `am-agents/libs/platform-ports/src/am_platform_ports/schemas/`
 
@@ -19,7 +19,7 @@ Location: `am-agents/libs/platform-ports/src/am_platform_ports/schemas/`
 
 ## Planned: QA demand
 
-Option A — extend SPT demand:
+Option A — extend existing demand shape:
 
 ```json
 {

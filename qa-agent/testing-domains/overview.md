@@ -18,7 +18,7 @@ How each testing type maps to **am-agents** specialists and **catalog** paths.
 | Service health matrix | System | tool-agent + verify | `catalog/verify/` | 3 |
 | Queue / webhook flow | System | support-agent + tool-agent | `catalog/qa/system/` | 3 |
 | DNS / TLS / latency | Network | tool-agent | `catalog/qa/network/` | 3 |
-| Load / performance | SPT | tool-agent (spt plugin) | `catalog/spt/` | exists |
+| Load / performance | SPT | tool-agent (spt plugin) | `catalog/qa/perf/` | exists |
 | Metrics / logs gate | Verify | tool-agent (observe) | `catalog/verify/` | 3 |
 | Data sanity | Backend | db-agent (optional) | demand-only | 4 |
 | Dependency audit | Security | repo CI / tool-agent | TBD | 4 |
@@ -42,7 +42,7 @@ Tag convention in catalog: `priority:P0`, or explicit `priority` field.
 ```text
 backend   ──► tool-agent     (tools.execute)
 network   ──► tool-agent     (tools.execute)
-spt       ──► tool-agent     (tools/spt/)
+spt       ──► tool-agent     (tools/spt/ — perf/load)
 verify    ──► tool-agent     (tools/observe/)
 frontend  ──► ui-test-agent  (ui.test.run)
 system    ──► support-agent  (orchestrated fan-out → both specialists)
@@ -52,7 +52,7 @@ system    ──► support-agent  (orchestrated fan-out → both specialists)
 
 ## Environment matrix
 
-| Environment | Backend | Frontend E2E | Network | SPT load |
+| Environment | Backend | Frontend E2E | Network | Load/perf |
 |-------------|---------|--------------|---------|----------|
 | PR preview | yes | yes | allowlist | no |
 | preprod | yes | yes | yes | limited |

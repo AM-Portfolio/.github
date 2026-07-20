@@ -8,9 +8,9 @@ Catalog holds **targets and check templates** — no Python logic (ADR-004, plat
 
 | Path | Purpose |
 |------|---------|
-| `catalog/spt/` | Perf/load targets — services + flows |
 | `catalog/verify/` | Metrics, logs, health check templates |
 | `catalog/prompts/` | Prompt bodies for agents |
+| `catalog/spt/` | Legacy perf targets — migrate refs into `catalog/qa/perf/` |
 
 ---
 
@@ -27,8 +27,10 @@ catalog/qa/
 │   └── *.yaml                  # ui-test-agent scenario refs
 ├── system/
 │   └── *.yaml                  # multi-step journeys (fan-out)
-└── network/
-    └── *.yaml                  # DNS, TLS, latency probes
+├── network/
+│   └── *.yaml                  # DNS, TLS, latency probes
+└── perf/
+    └── *.yaml                  # load/k6 scenario refs
 ```
 
 ---
@@ -60,7 +62,7 @@ Secrets: `*_secret_ref` keys only — resolved via SecretBroker (ADR-002).
 | `{ tags: [...] }` | Run targets matching any tag |
 | `{ all: true }` | Rejected unless lab + approval + under max count |
 
-Env guards: `SPT_MAX_TARGETS_PER_RUN` (default 20; prod 5).
+Env guards: `QA_MAX_TARGETS_PER_RUN` (default 20; prod 5) — same rules as ADR-004.
 
 ---
 
@@ -131,6 +133,4 @@ Implementation: extend `support-agent/intelligence/catalog.py` (Phase 1).
 
 ## Related
 
-- SPT schema: `catalog/spt/target.schema.json`
-- [PLAN.md](../PLAN.md) §6
-- [ADR-004](https://github.com/AM-Portfolio/am-agents/blob/main/docs/agent-platform/decisions/ADR-004-spt-catalog-selectors.md)
+- ADR-004 selector pattern: `docs/agent-platform/decisions/ADR-004-spt-catalog-selectors.md`

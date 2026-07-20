@@ -1,6 +1,6 @@
 # Phased rollout
 
-Implementation phases for SPT / QA inside **`am-agents`**.  
+Implementation phases for **QA agent** inside **`am-agents`**.  
 Plan-only — no dates; ordered by dependency.
 
 ---
@@ -11,7 +11,7 @@ Plan-only — no dates; ordered by dependency.
 
 | Deliverable | Location |
 |-------------|----------|
-| Keep plan | `.github/spt-qa-agent/` |
+| Keep plan | `.github/qa-agent/` |
 | Alignment with am-agents | [ALIGNMENT.md](../ALIGNMENT.md) |
 | Folder structure target | [FOLDER_STRUCTURE.md](../FOLDER_STRUCTURE.md) |
 
@@ -42,7 +42,7 @@ Plan-only — no dates; ordered by dependency.
 
 | Task | Owner module |
 |------|--------------|
-| Add `qa_run` workflow + activities (or extend SptRun) | support-agent/orchestrator |
+| Add `qa_run` workflow + activities | support-agent/orchestrator |
 | Route QA targets → tool-agent / ui-test-agent | support-agent/router |
 | RunStore `kind=qa` rows | platform-ports + postgres adapter |
 | Reusable workflow in am-pipelines | am-pipelines |
@@ -63,7 +63,7 @@ Plan-only — no dates; ordered by dependency.
 | Wire `catalog/verify/` into QA verify step | support-agent + tool-agent observe |
 | Network probe entries in `catalog/qa/network/` | catalog |
 | Partial-failure reporting in PR comment | support-agent |
-| Enable `SUPPORT_AGENT_SPT_PARITY` in staging | ops |
+| Enable `SUPPORT_AGENT_QA_PARITY` in staging | ops |
 
 **Exit criteria:** System catalog run produces partial-safe summary; verify checks attach to RunStore steps.
 
@@ -98,8 +98,8 @@ Phase 2 (workflow + PR)
     │
     ├──────────────┐
     ▼              ▼
-Phase 3        (SPT parity
-(system+verify)  optional parallel)
+Phase 3        (optional parallel)
+(system+verify)
     │
     ▼
 Phase 4 (intelligence)
