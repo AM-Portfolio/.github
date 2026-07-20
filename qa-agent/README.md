@@ -1,6 +1,6 @@
 # QA Agent — Keep Plan (Review Draft)
 
-Planning package for full-stack **QA agent** testing inside the **AM-Portfolio agent ecosystem**.
+Planning package for full-stack **QA** testing and extraction of **`spt-agent`** inside the AM-Portfolio agent ecosystem.
 
 **Implementation home:** `AM-Portfolio/am-agents`  
 **This folder:** review-only keep plan — no code, no workflows.
@@ -11,30 +11,35 @@ Planning package for full-stack **QA agent** testing inside the **AM-Portfolio a
 
 | Document | Read for |
 |----------|----------|
-| [PLAN.md](./PLAN.md) | Master strategy, agent roles, phases, safety |
-| [FOLDER_STRUCTURE.md](./FOLDER_STRUCTURE.md) | Target folder layout aligned with `am-agents` |
-| [ALIGNMENT.md](./ALIGNMENT.md) | Mapping to existing `support-agent`, `tool-agent`, `ui-test-agent` |
+| [PLAN.md](./PLAN.md) | Master strategy |
+| [FOLDER_STRUCTURE.md](./FOLDER_STRUCTURE.md) | Target layout incl. new `spt-agent/` |
+| [ALIGNMENT.md](./ALIGNMENT.md) | Mapping to existing agents |
+| [agents/spt-agent.md](./agents/spt-agent.md) | SPT extract — execute only, no orchestration |
 
 ---
 
 ## Agent model
 
 ```
-Trigger (PR / QA demand / /qa)
+Trigger (PR / QA or SPT demand / /qa)
            │
            ▼
-    support-agent          ← orchestrator (plan, route, verify, report)
-     ┌─────┼─────┐
-     │     │     │
-tool-agent  ui-test-agent  db-agent (optional)
-(execute)   (frontend E2E)  (data checks)
-     │     │
-     └─────┘
+    support-agent          ← ALL orchestration (plan, route, verify, report)
+     ┌─────┼──────┬────────┐
+     │     │      │        │
+tool-agent  ui-test  spt-agent  db-agent
+(backend,   (E2E)   (load/perf) (optional)
+ network,
+ observe)
+           │
            ▼
-    RunStore + QA verdict
+    RunStore + verdict
 ```
 
-**Note:** `fin-agent` (`am-fin-agent`) is the finance product agent — not part of QA.
+**Decision:** Extract **`spt-agent`** as a new specialist module.  
+**Orchestration stays out** of spt-agent — only in **support-agent**.
+
+**Note:** `fin-agent` is finance product — not part of QA/SPT.
 
 ---
 
@@ -48,6 +53,7 @@ qa-agent/
 ├── phases/PHASES.md
 ├── agents/
 │   ├── support-agent.md
+│   ├── spt-agent.md          ★ extract plan
 │   ├── tool-agent.md
 │   └── ui-test-agent.md
 ├── catalog/README.md

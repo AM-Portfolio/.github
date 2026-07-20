@@ -1,122 +1,99 @@
 # Alignment with `am-agents`
 
-How this QA plan maps to the **existing** AM-Portfolio agent platform.
+How this plan maps to the platform — including **spt-agent extract**.
 
 ---
 
-## Repo naming
+## Decision (locked for this draft)
 
-| You may say | Actual repo / path |
-|-------------|-------------------|
-| am-agent | **`AM-Portfolio/am-agents`** (monorepo) |
-| Support agent | **`am-agents/support-agent/`** |
-| Tool agent | **`am-agents/tool-agent/`** |
-| Fin agent | **`AM-Portfolio/am-fin-agent`** — finance only, **not QA** |
+| Decision | Detail |
+|----------|--------|
+| Extract SPT | New module `am-agents/spt-agent/` |
+| Orchestration | **Only** in `support-agent/` |
+| Migrate from | `tool-agent/tools/spt/` → deprecate after parity |
+| Catalog | Stays in `catalog/spt/` (data); not inside spt-agent |
 
 ---
 
 ## Agent mapping
 
-| QA plan role | am-agents component | Notes |
-|--------------|---------------------|-------|
-| Orchestrator | **support-agent** | `QaRunWorkflow`, router, RunStore, A2A |
-| Scope / plan | **support-agent** `intelligence/` + `catalog/` | Was mislabeled "Fin Agent" in v1 plan |
-| Backend execute | **tool-agent** | plan/execute HTTP, sandbox |
-| Frontend execute | **ui-test-agent** | Playwright, baselines |
-| Load / performance | **tool-agent** `tools/spt/` + `catalog/qa/perf/` | ADR-004 selectors |
-| Health / metrics | **tool-agent** `tools/observe/` + `catalog/verify/` | check_ref templates |
-| Data checks | **db-agent** | Optional, incident-driven |
-| Final verdict | **support-agent** verify + RunStore | `overall_status`, notify |
-| Finance | **fin-agent** | Out of scope for QA |
+| Role | Component | Notes |
+|------|-----------|-------|
+| Orchestrator | **support-agent** | Workflows, selector, fan-out, RunStore, verdict |
+| Load / perf execute | **spt-agent** ★ | prepare / execute / status / cancel |
+| Backend / network / observe | **tool-agent** | No long-term SPT ownership |
+| Frontend E2E | **ui-test-agent** | Unchanged |
+| Data checks | **db-agent** | Optional |
+| Finance | **fin-agent** | Out of scope |
 
 ---
 
-## What already exists (reuse, do not rebuild)
+## What already exists
 
-| Capability | Location | Status |
-|------------|----------|--------|
-| Specialist registry | `support-agent/registry/agents.yaml` | Live |
-| QA catalog + schema | `catalog/qa/` | Live (planned) |
-| QA workflow scaffold | `support-agent/.../workflows/qa_run.py` | Planned |
-| QA activities | `support-agent/.../activities/qa.py` | Planned |
-| Tool-agent perf plugin | `tool-agent/tools/spt/` | Live |
-| UI E2E agent | `ui-test-agent/` | Live |
-| Verify checks catalog | `catalog/verify/checks.yaml` | Live |
-| Platform ports (RunStore, SPT DTOs) | `libs/platform-ports/` | Live |
-| ADR-004 SPT selectors | `docs/agent-platform/decisions/ADR-004-*` | Accepted |
-| Observability | support-agent Prometheus + OTLP | Live |
-| CI for support-agent | `.github/workflows/am-support-agent.yml` | Live |
+| Capability | Location | After extract |
+|------------|----------|---------------|
+| `SptRunWorkflow` | support-agent | Keep — retarget calls to spt-agent |
+| SPT activities | support-agent `activities/spt.py` | Keep — HTTP to spt-agent |
+| SPT plugin | tool-agent `tools/spt/` | **Migrate then deprecate** |
+| `catalog/spt/` | catalog/ | Unchanged (data) |
+| ADR-004 selectors | docs | Unchanged — enforced in support-agent |
+| Registry | support-agent `agents.yaml` | **Add spt-agent** |
 
 ---
 
-## What this plan adds (net new)
+## Net new
 
 | Item | Phase |
 |------|-------|
-| `catalog/qa/` — backend, frontend, system, network entries | 1 |
-| QA demand schema (`QaDemandRequest`) | 1 |
-| `qa_run` workflow or `kind: qa` on existing workflow | 2 |
-| PR trigger via `am-pipelines` | 2 |
-| `/qa` PR commands | 2 |
-| ADR-006 QA catalog decision doc | 1 |
-| RunStore `kind=qa` analytics | 4 |
+| `spt-agent/` module | 1 |
+| support-agent adapter `spt_agent/` | 2 |
+| Registry entry + env `SPT_AGENT_BASE_URL` | 1–2 |
+| ADR-006 spt-agent extract | 1 |
+| Deprecate tool-agent spt plugin | 3 |
+| `catalog/qa/` functional matrix | 1–2 (parallel) |
 
 ---
 
-## v1 plan corrections
-
-The first draft in this folder incorrectly used **"Fin Agent (Find + Finalize)"**. Corrections:
-
-| v1 (wrong) | v2 (this plan) |
-|------------|----------------|
-| New QA orchestrator package | **support-agent** |
-| Fin Agent = scope + verdict | **support-agent** planner + verify |
-| fin-agent in QA diagram | **Removed** — finance is separate |
-| Plan implies new executors | **tool-agent** + **ui-test-agent** |
-| Generic JSON contracts | **am_platform_ports** DTOs |
-| Implementation in `.github` | **am-agents** only |
-
----
-
-## Specialist routing (from registry)
+## Specialist routing (target registry)
 
 ```yaml
-# support-agent/registry/agents.yaml (existing)
-defaults:
-  prefer: tool-agent
-
 agents:
-  - agent_id: tool-agent      # backend, network, SPT, observe
+  - agent_id: tool-agent      # backend, network, observe
   - agent_id: ui-test-agent   # frontend E2E
+  - agent_id: spt-agent       # load / perf ★ NEW
   - agent_id: db-agent        # optional data
 ```
 
-QA catalog entries declare which capability to call — router resolves URL from registry.
+---
+
+## PR → SPT path (after extract)
+
+```text
+PR / demand
+  → support-agent (orchestrate)
+      → spt-agent (execute k6)
+      → tool-agent (optional observe)
+  → support-agent (verdict + PR comment)
+```
+
+LLM: not required on happy path. Optional later only in support-agent planner / narrative.
 
 ---
 
-## Performance vs functional QA
+## v2 → v3 corrections
 
-Both live under **qa-agent** / `catalog/qa/`. Performance targets use `catalog/qa/perf/` and the existing tool-agent `spt` plugin. Selector and RunStore rules follow ADR-004.
-
----
-
-## PR Agent vs QA Agent
-
-| | Gemini PR Agent (`.github`) | QA / SPT (am-agents) |
-|---|----------------------------|----------------------|
-| Repo | `.github` + `am-pipelines` | `am-agents` |
-| Action | Code review, describe | Run tests, produce verdict |
-| Trigger | PR opened | PR + `/qa` + QA demand |
-| Model | Gemini 1.5 Flash | LLM optional in specialists |
-| Complementary | Yes — review + execute both |
+| Earlier plan | This revision |
+|--------------|---------------|
+| SPT via tool-agent `tools/spt/` | Extract **spt-agent** module |
+| Perf listed under tool-agent | Perf = **spt-agent** only |
+| Orchestration ambiguity | Explicit: **all orchestration out** of spt-agent |
 
 ---
 
-## Review sign-off targets
+## Review sign-off
 
-1. Confirm orchestrator = **support-agent** only  
-2. Confirm **fin-agent** excluded from QA  
-3. Confirm **catalog/qa/** location  
-4. Approve phase order in [phases/PHASES.md](./phases/PHASES.md)  
-5. Approve move to `am-agents/docs/agent-platform/` after review  
+1. Confirm extract `spt-agent/`  
+2. Confirm orchestration **only** in support-agent  
+3. Confirm deprecate `tool-agent/tools/spt/` after parity  
+4. Confirm catalog stays outside spt-agent  
+5. Approve phases in [phases/PHASES.md](./phases/PHASES.md)  

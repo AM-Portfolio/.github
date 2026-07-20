@@ -1,9 +1,8 @@
 # Target folder structure (am-agents)
 
-Planning layout for **QA agent** work inside **`AM-Portfolio/am-agents`**.  
-Follows the existing SoT: `docs/agent-platform/FOLDER_STRUCTURE.md`.
+Planning layout for **QA** + **spt-agent extract** inside **`AM-Portfolio/am-agents`**.
 
-Legend: **exists** = already in repo · **planned** = this QA plan adds.
+Legend: **exists** · **planned** · **migrate**
 
 ---
 
@@ -11,142 +10,127 @@ Legend: **exists** = already in repo · **planned** = this QA plan adds.
 
 | Path | Role | Status |
 |------|------|--------|
-| `support-agent/` | QA orchestrator — scope, route, verify, report | **exists** — extend |
-| `tool-agent/` | Backend, network, load/perf, observe execution | **exists** |
-| `ui-test-agent/` | Frontend Playwright E2E | **exists** |
-| `db-agent/` | Optional data checks | **exists** |
-| `catalog/verify/` | Health/metrics checks | **exists** |
-| `catalog/qa/` | QA test matrix (all domains incl. perf) | **planned** |
-| `catalog/prompts/` | Prompt data | **exists** |
-| `libs/platform-ports/` | Shared DTOs (`SptDemandRequest`, RunStore) | **exists** |
-| `libs/platform-adapters/` | Grafana, OpenProject, vault, etc. | **exists** |
-| `am-pipelines` | PR trigger reusable workflow | **external** |
+| `support-agent/` | **Orchestration only** — workflows, catalog, RunStore, route | **exists** — wire to spt-agent |
+| `spt-agent/` | **New specialist** — load/perf execute only | **planned ★** |
+| `tool-agent/` | Backend, network, observe | **exists** — drop spt plugin after cutover |
+| `tool-agent/tools/spt/` | Legacy SPT plugin | **migrate → spt-agent** then deprecate |
+| `ui-test-agent/` | Frontend E2E | **exists** |
+| `db-agent/` | Optional data | **exists** |
+| `catalog/spt/` | Perf targets (data) | **exists** — owned by platform, not spt-agent |
+| `catalog/qa/` | Functional QA matrix | **planned** |
+| `catalog/verify/` | Health/metrics templates | **exists** |
+| `libs/platform-ports/` | Shared DTOs | **exists** |
 
-**Not in scope:** new top-level `qa-agent/` package — QA extends support-agent + catalog.
+**Lock:** No orchestration package inside `spt-agent/`. No Temporal worker inside `spt-agent/`.
 
 ---
 
-## 1. `am-agents` — QA additions (planned)
+## 1. `am-agents` — target
 
 ```text
 am-agents/
 ├── catalog/
-│   ├── verify/                           # exists — check_ref templates
-│   ├── qa/                               # planned ★
-│   │   ├── README.md
-│   │   ├── selectors.schema.json
-│   │   ├── backend/
-│   │   ├── frontend/
-│   │   ├── system/
-│   │   ├── network/
-│   │   └── perf/                         # load/k6 refs
-│   └── prompts/                          # exists
+│   ├── spt/                              # exists — data only
+│   ├── verify/                           # exists
+│   ├── qa/                               # planned
+│   └── prompts/
 │
-├── support-agent/                        # exists — extend
-│   ├── src/am_support_agent/
-│   │   ├── orchestrator/
-│   │   │   ├── workflows/
-│   │   │   │   ├── qa_run.py             # planned
-│   │   │   │   └── spt_run.py            # exists — perf path may merge into qa
-│   │   │   ├── activities/
-│   │   │   │   ├── qa.py                 # planned
-│   │   │   │   └── spt.py                # exists
-│   │   │   ├── router.py                 # exists — add qa routing
-│   │   │   └── runner.py                 # exists
-│   │   ├── intelligence/
-│   │   │   └── catalog.py                # exists — add list_qa()
-│   │   ├── registry/agents.yaml          # exists
-│   │   └── stores/                       # exists — RunStore
-│   └── docs/
-│       └── qa-orchestration.md           # planned
+├── support-agent/                        # ORCHESTRATION
+│   └── src/am_support_agent/
+│       ├── orchestrator/
+│       │   ├── workflows/
+│       │   │   ├── spt_run.py            # exists — call spt-agent not tool-agent
+│       │   │   └── qa_run.py             # planned
+│       │   ├── activities/
+│       │   │   ├── spt.py                # exists — retarget HTTP to spt-agent
+│       │   │   └── qa.py                 # planned
+│       │   └── router.py
+│       ├── adapters/
+│       │   └── spt_agent/                # planned — HTTP client
+│       ├── registry/agents.yaml          # add spt-agent entry
+│       └── stores/                       # RunStore stays here
 │
-├── tool-agent/                           # exists — no structural change
+├── spt-agent/                            # NEW SPECIALIST ★ — NO ORCHESTRATION
+│   ├── README.md
+│   ├── pyproject.toml
+│   ├── Dockerfile
+│   ├── helm/
+│   ├── app/                              # or src/am_spt_agent/
+│   │   ├── main.py                       # health, ready, prepare, execute, status, cancel
+│   │   ├── engines/
+│   │   │   ├── memory.py
+│   │   │   └── k6.py
+│   │   ├── safety.py
+│   │   └── schemas.py
+│   └── tests/
+│
+├── tool-agent/
 │   └── tools/
-│       ├── spt/                          # exists
-│       ├── observe/                      # exists
-│       └── ...                           # postgres, redis, etc.
+│       ├── spt/                          # deprecate after cutover
+│       ├── observe/                      # stays
+│       └── ...
 │
-├── ui-test-agent/                        # exists — no structural change
-│   └── app/agent/                        # planner, executor, reporter
+├── ui-test-agent/                        # unchanged
+├── db-agent/                             # unchanged
 │
-├── docs/agent-platform/
-│   ├── decisions/
-│   │   └── ADR-006-qa-catalog.md         # planned
-│   └── ...
-│
-└── .github/workflows/
-    └── am-support-agent.yml              # exists — add qa contract tests later
+└── docs/agent-platform/
+    └── decisions/
+        └── ADR-006-spt-agent-extract.md  # planned
 ```
 
 ---
 
-## 2. `support-agent/` module tree (reference)
+## 2. What lives where
 
-Matches the canonical support-agent target tree from `support-agent/README.md`:
-
-```text
-support-agent/
-├── README.md
-├── contracts/                 # A2A, capabilities, evidence
-├── registry/agents.yaml       # specialist endpoints
-├── adapters/                  # tool_agent, ui_test_agent, db_agent
-├── orchestrator/
-│   ├── workflows/             # QaRun, AlertIncident, A2A
-│   ├── activities/
-│   ├── router/
-│   └── hitl/
-├── intelligence/              # catalog reader, verification
-├── memory/                    # procedural → catalog refs
-├── stores/                    # RunStore
-├── observability/
-├── tests/
-│   ├── contract/
-│   ├── parity/
-│   └── e2e/
-└── deploy/helm/
-```
-
-QA work plugs into **orchestrator**, **intelligence**, and **catalog** — not a parallel tree.
+| Concern | Module |
+|---------|--------|
+| PR / demand trigger | am-pipelines → support-agent |
+| Selector expand, fan-out, failure_mode | support-agent |
+| RunStore parent + summary | support-agent |
+| k6 / prep / status / cancel | **spt-agent** |
+| API smoke, DNS, TLS | tool-agent |
+| Playwright E2E | ui-test-agent |
+| Catalog YAML files | `catalog/` (data) |
 
 ---
 
 ## 3. This `.github` repo (plan only)
 
 ```text
-.github/                         # org config repo
-├── .github/workflows/
-│   └── pr-agent.yml             # exists — Gemini PR review
-└── qa-agent/                  # this keep plan (review draft)
+.github/
+└── qa-agent/                 # this keep plan
     ├── PLAN.md
     ├── FOLDER_STRUCTURE.md
-    ├── ALIGNMENT.md
+    ├── agents/spt-agent.md   # extract spec
     └── ...
 ```
 
-After review approval, copy the approved plan into `am-agents/docs/agent-platform/` and implement there.
-
 ---
 
-## 4. Import / coupling rules (unchanged)
+## 4. Import / coupling rules
 
 ```text
-support-agent orchestrator  →  am_platform_ports (schemas)
-support-agent runtime       →  specialists via HTTP (registry/agents.yaml)
-tool-agent / ui-test-agent  →  no import of support-agent
-catalog/qa/                 →  data only — no Python logic
+support-agent  →  am_platform_ports
+support-agent  →  spt-agent / tool-agent / ui-test-agent  (HTTP only)
+spt-agent      →  am_platform_ports (optional DTOs) + engines
+spt-agent      ✗  support-agent
+spt-agent      ✗  Temporal workflows
+spt-agent      ✗  catalog writer / selector expand
+tool-agent     ✗  spt-agent (after cutover; no cross-call required)
 ```
 
 ---
 
-## 5. What must not appear
+## 5. What must not appear in `spt-agent/`
 
 | Forbidden | Why |
 |-----------|-----|
-| New `qa-agent/` orchestrator package | Duplicates support-agent |
-| Service names in workflow Python | ADR-004 — use catalog |
-| QA logic in `.github` repo | Wrong repo — am-agents only |
-| Using `fin-agent` for QA scope | fin-agent = finance product |
-| Forked platform-ports schemas | ADR-003 extractable SDK |
+| `orchestrator/`, Temporal worker | Orchestration is support-agent |
+| `SptRunWorkflow` | Parent workflow stays in support-agent |
+| Catalog resolve / selector expand | ADR-004 — orchestrator responsibility |
+| Fan-out to other specialists | Single-target executor |
+| PR comment / Cliq notify | support-agent / am-pipelines |
+| Import of support-agent packages | Boundary break |
 
 ---
 
@@ -154,10 +138,10 @@ catalog/qa/                 →  data only — no Python logic
 
 | Phase | Adds |
 |-------|------|
-| 0 | Keep plan in `.github/qa-agent/` (this review) |
-| 1 | `catalog/qa/` + schema; `list_qa()` in CatalogReader |
-| 2 | `qa_run` workflow/activities; am-pipelines PR trigger |
-| 3 | system + network catalog entries; verify integration |
-| 4 | RunStore analytics; flaky + risk-based selection |
+| 0 | Keep plan (this review) |
+| 1 | `spt-agent/` scaffold + Helm + contract tests |
+| 2 | support-agent adapter + registry; dual-run parity |
+| 3 | Deprecate `tool-agent/tools/spt/`; PR wiring |
+| 4 | Dashboards / optional LLM scope in support-agent only |
 
 See [phases/PHASES.md](./phases/PHASES.md).

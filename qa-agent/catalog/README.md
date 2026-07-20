@@ -10,7 +10,7 @@ Catalog holds **targets and check templates** — no Python logic (ADR-004, plat
 |------|---------|
 | `catalog/verify/` | Metrics, logs, health check templates |
 | `catalog/prompts/` | Prompt bodies for agents |
-| `catalog/spt/` | Legacy perf targets — migrate refs into `catalog/qa/perf/` |
+| `catalog/spt/` | Perf/load targets — **owned as data**; resolved by support-agent; executed by **spt-agent** |
 
 ---
 

@@ -1,115 +1,97 @@
 # Phased rollout
 
-Implementation phases for **QA agent** inside **`am-agents`**.  
-Plan-only — no dates; ordered by dependency.
+**QA** + **spt-agent extract**. Orchestration remains in support-agent for all phases.
 
 ---
 
 ## Phase 0 — Review (current)
 
-**Goal:** Align stakeholders on architecture before code.
-
 | Deliverable | Location |
 |-------------|----------|
 | Keep plan | `.github/qa-agent/` |
-| Alignment with am-agents | [ALIGNMENT.md](../ALIGNMENT.md) |
-| Folder structure target | [FOLDER_STRUCTURE.md](../FOLDER_STRUCTURE.md) |
+| spt-agent extract spec | [agents/spt-agent.md](../agents/spt-agent.md) |
 
-**Exit criteria:** Review checklist in [PLAN.md](../PLAN.md) signed off.
-
----
-
-## Phase 1 — Catalog and contracts
-
-**Goal:** Define QA targets as data; no workflow changes yet.
-
-| Task | Owner module |
-|------|--------------|
-| Add `catalog/qa/` directory + README | am-agents/catalog |
-| Define `selectors.schema.json` (mirror ADR-004) | am-agents/catalog/qa |
-| Sample entries: backend, frontend, network | am-agents/catalog/qa |
-| Extend `CatalogReader.list_qa()` | support-agent/intelligence |
-| Draft ADR-006 QA catalog | docs/agent-platform/decisions |
-| Contract tests for catalog parse | support-agent/tests |
-
-**Exit criteria:** Catalog loads in support-agent; selector resolves to sample TargetSet in unit test.
+**Exit:** Review checklist in PLAN.md signed off.
 
 ---
 
-## Phase 2 — QA workflow + PR trigger
+## Phase 1 — Scaffold `spt-agent/`
 
-**Goal:** End-to-end QA run from support-agent; optional PR hook.
+| Task | Owner |
+|------|-------|
+| Create `am-agents/spt-agent/` module (app, Dockerfile, Helm) | spt-agent |
+| HTTP API: prepare / execute / status / cancel | spt-agent |
+| Engines: memory + k6 stub (sandbox gate) | spt-agent |
+| Contract tests | spt-agent |
+| Draft ADR-006 extract | docs |
+| Registry entry (not yet live traffic) | support-agent |
 
-| Task | Owner module |
-|------|--------------|
-| Add `qa_run` workflow + activities | support-agent/orchestrator |
-| Route QA targets → tool-agent / ui-test-agent | support-agent/router |
-| RunStore `kind=qa` rows | platform-ports + postgres adapter |
-| Reusable workflow in am-pipelines | am-pipelines |
-| PR labels `qa:pass` / `qa:fail` / `qa:partial` | am-pipelines |
-| `/qa` comment commands | am-pipelines or support-agent gateway |
-
-**Exit criteria:** Manual QA demand completes; PR trigger runs smoke catalog on pilot repo.
+**Exit:** spt-agent pod healthy; contract tests green; **no orchestration code in module**.
 
 ---
 
-## Phase 3 — System + verify integration
+## Phase 2 — Wire support-agent → spt-agent
 
-**Goal:** Multi-service journeys and observability checks.
+| Task | Owner |
+|------|-------|
+| Adapter `adapters/spt_agent/` | support-agent |
+| Retarget `activities/spt.py` capability calls to spt-agent HTTP | support-agent |
+| Dual-run parity vs `tool-agent/tools/spt/` | both |
+| Enable `SUPPORT_AGENT_SPT_PARITY` in staging against spt-agent | ops |
 
-| Task | Owner module |
-|------|--------------|
-| `catalog/qa/system/` journey entries | catalog |
-| Wire `catalog/verify/` into QA verify step | support-agent + tool-agent observe |
-| Network probe entries in `catalog/qa/network/` | catalog |
-| Partial-failure reporting in PR comment | support-agent |
-| Enable `SUPPORT_AGENT_QA_PARITY` in staging | ops |
-
-**Exit criteria:** System catalog run produces partial-safe summary; verify checks attach to RunStore steps.
+**Exit:** Staging SPT demand completes via spt-agent; parity report accepted.
 
 ---
 
-## Phase 4 — Intelligence and ops
+## Phase 3 — Cutover + QA surface
 
-**Goal:** Reduce noise; improve signal over time.
+| Task | Owner |
+|------|-------|
+| Deprecate / remove `tool-agent/tools/spt/` | tool-agent |
+| PR / `/spt` trigger via am-pipelines | am-pipelines |
+| Optional observe/verify via tool-agent | support-agent |
+| `catalog/qa/` functional domains (parallel track) | catalog + support-agent |
 
-| Task | Owner module |
-|------|--------------|
-| Flaky test detection from RunStore history | support-agent/intelligence |
-| Risk-based selection (small diff → targeted QA) | support-agent/planner |
-| Scheduled full regression | am-pipelines cron |
-| Grafana dashboard from RunStore metrics | am-obs-platform |
-| Gated learning from QA feedback | support-agent/learning |
+**Exit:** Production SPT path uses spt-agent only; tool-agent SPT plugin gone.
 
-**Exit criteria:** False positive rate measured; dashboard live for pilot repos.
+---
+
+## Phase 4 — Intelligence / ops
+
+| Task | Owner |
+|------|-------|
+| RunStore dashboards | am-obs-platform |
+| Optional LLM scope in **support-agent only** | support-agent |
+| Flaky / risk-based selection | support-agent |
+
+**Exit:** Metrics live; spt-agent still execute-only.
 
 ---
 
 ## Dependency graph
 
 ```text
-Phase 0 (review)
+Phase 0 review
     │
     ▼
-Phase 1 (catalog)
+Phase 1 spt-agent scaffold
     │
     ▼
-Phase 2 (workflow + PR)
-    │
-    ├──────────────┐
-    ▼              ▼
-Phase 3        (optional parallel)
-(system+verify)
+Phase 2 support-agent → spt-agent
     │
     ▼
-Phase 4 (intelligence)
+Phase 3 cutover + PR
+    │
+    ▼
+Phase 4 intelligence (orchestrator only)
 ```
 
 ---
 
-## Out of scope for all phases
+## Out of scope forever (for spt-agent module)
 
-- New orchestrator package outside support-agent
-- fin-agent changes
-- Production load tests on every PR
-- Auto-merge without human policy
+- Temporal workflows inside spt-agent  
+- Selector expand / fan-out  
+- Parent RunStore ownership  
+- Calling other specialists  
+- Becoming QA orchestrator  

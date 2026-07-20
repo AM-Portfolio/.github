@@ -1,6 +1,6 @@
-# Example registry excerpt — QA routing reference
-# Full file lives in am-agents/support-agent/registry/agents.yaml
-# This is plan-only; not deployed from .github repo.
+# Example registry — specialists after spt-agent extract
+# Full file: am-agents/support-agent/registry/agents.yaml
+# Plan-only; not deployed from .github
 
 version: 1
 
@@ -30,7 +30,24 @@ agents:
         ops: [discover, plan, execute, stream]
       - id: tools.query
         ops: [discover, execute, stream]
-    # QA routes: backend, network, spt, verify/observe
+    # Routes: backend, network, observe — NOT load/perf after cutover
+
+  - agent_id: spt-agent
+    display_name: SPT Agent
+    base_url_env: SPT_AGENT_BASE_URL
+    default_base_url: http://127.0.0.1:8150
+    preferred: true
+    health_path: /health
+    ready_path: /ready
+    capabilities:
+      - id: spt.prepare
+        ops: [execute]
+      - id: spt.execute
+        ops: [execute, status, cancel]
+      - id: spt.status
+        ops: [status]
+    # Routes: load / perf / synthetic only
+    # No orchestration — single-target executor
 
   - agent_id: ui-test-agent
     display_name: UI Test Agent
@@ -43,7 +60,6 @@ agents:
         ops: [discover, plan, execute, status, stream]
       - id: ui.test.report
         ops: [discover, status]
-    # QA routes: frontend, e2e, visual baseline
 
   - agent_id: db-agent
     display_name: DB Agent
@@ -54,7 +70,6 @@ agents:
     capabilities:
       - id: db.execute
         ops: [discover, plan, execute]
-    # QA routes: optional data validation only
 
-# QA catalog target.specialist must match agent_id above.
-# fin-agent is NOT registered here — finance is a separate product surface.
+# fin-agent is NOT registered — finance is a separate product surface.
+# Orchestration is NEVER registered as a specialist target.
