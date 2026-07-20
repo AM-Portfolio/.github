@@ -1,0 +1,70 @@
+# Example registry — after qa-agent extract
+# Full file: am-agents/support-agent/registry/agents.yaml
+# Plan-only; not deployed from .github
+
+version: 1
+
+platform:
+  agent_id: support-agent
+  display_name: Support Agent
+
+defaults:
+  prefer: qa-agent
+  budgets:
+    max_fanout: 8
+    max_latency_ms: 120000
+    max_cost_units: 100
+
+agents:
+  - agent_id: qa-agent
+    display_name: QA Agent
+    base_url_env: QA_AGENT_BASE_URL
+    default_base_url: http://127.0.0.1:8160
+    preferred: true
+    health_path: /health
+    ready_path: /ready
+    capabilities:
+      - id: qa.execute
+        ops: [execute, status, cancel]
+      - id: qa.status
+        ops: [status]
+    # Routes: backend, system, network (+ frontend if chosen)
+    # No orchestration — single-target executor
+
+  - agent_id: ui-test-agent
+    display_name: UI Test Agent
+    base_url_env: UI_TEST_AGENT_BASE_URL
+    default_base_url: http://127.0.0.1:8130
+    preferred: true
+    health_path: /health
+    capabilities:
+      - id: ui.test.run
+        ops: [discover, plan, execute, status, stream]
+      - id: ui.test.report
+        ops: [discover, status]
+
+  - agent_id: tool-agent
+    display_name: Tool Agent
+    base_url_env: TOOL_AGENT_BASE_URL
+    default_base_url: http://127.0.0.1:8141
+    preferred: false
+    health_path: /health
+    ready_path: /ready
+    capabilities:
+      - id: tools.execute
+        ops: [discover, plan, execute, stream]
+      - id: tools.query
+        ops: [discover, execute, stream]
+    # Routes: observe, infra tools, SPT plugin
+
+  - agent_id: db-agent
+    display_name: DB Agent
+    base_url_env: DB_AGENT_BASE_URL
+    default_base_url: http://127.0.0.1:8140
+    preferred: false
+    capabilities:
+      - id: db.execute
+        ops: [discover, plan, execute]
+
+# fin-agent is NOT registered — finance product.
+# Orchestration is NEVER registered as a specialist target.
