@@ -1,83 +1,105 @@
-# Testing Domains Overview
+# Testing domains — coverage map
 
-Complete map of testing types the SPT / QA agent covers, with Fin Agent (scope) vs Tool Agent (execution) split.
-
----
-
-## Matrix
-
-| Type | Domain | Fin Agent finds | Tool Agent runs |
-|------|--------|-----------------|-----------------|
-| Unit tests | Backend / Frontend | Changed modules → test files | `pytest`, `jest`, `vitest`, etc. |
-| Integration tests | Backend | API + DB touchpoints | Test suite + testcontainers |
-| Contract tests | Backend | OpenAPI diff | Schema validator, Pact |
-| API smoke | Backend | Public routes in diff | `curl` / HTTP client |
-| Component tests | Frontend | Changed `.tsx` / `.vue` | Unit runner |
-| E2E UI | Frontend | User journeys affected | Playwright / Cypress |
-| Accessibility | Frontend | Form / nav changes | axe in Playwright |
-| Synthetic monitoring | System | Critical paths | Scripted multi-step flows |
-| Service health | System | `docker-compose`, k8s | Health endpoint matrix |
-| Event / queue | System | Producers/consumers in diff | Publish + consume test msg |
-| DNS | Network | Hostnames in infra diff | `dig`, `nslookup` |
-| TLS | Network | HTTPS endpoints | `openssl s_client`, cert expiry |
-| Latency | Network | SLO-defined URLs | `curl -w`, repeated samples |
-| Connectivity | Network | Cross-region / VPC | Probe from Cloud Agent |
-| Dependency audit | Security (P2) | Lockfile changes | `npm audit`, `pip-audit` |
-| Load | Performance (P2) | Release only | k6 scenarios on staging |
+How each testing type maps to **am-agents** specialists and **catalog** paths.
 
 ---
 
-## Priority rules (Fin Agent)
+## Summary matrix
 
+| Type | Domain | Specialist | Catalog | Phase |
+|------|--------|------------|---------|-------|
+| Unit / integration | Backend | tool-agent | `catalog/qa/backend/` | 2 |
+| API smoke / contract | Backend | tool-agent | `catalog/qa/backend/` | 2 |
+| Component / unit UI | Frontend | repo CI (optional) | — | 2 |
+| E2E UI | Frontend | ui-test-agent | `catalog/qa/frontend/` | 2 |
+| Visual baseline | Frontend | ui-test-agent | `catalog/qa/frontend/` | 2 |
+| Accessibility smoke | Frontend | ui-test-agent | `catalog/qa/frontend/` | 3 |
+| Multi-service journey | System | support-agent fan-out | `catalog/qa/system/` | 3 |
+| Service health matrix | System | tool-agent + verify | `catalog/verify/` | 3 |
+| Queue / webhook flow | System | support-agent + tool-agent | `catalog/qa/system/` | 3 |
+| DNS / TLS / latency | Network | tool-agent | `catalog/qa/network/` | 3 |
+| Load / performance | SPT | tool-agent (spt plugin) | `catalog/spt/` | exists |
+| Metrics / logs gate | Verify | tool-agent (observe) | `catalog/verify/` | 3 |
+| Data sanity | Backend | db-agent (optional) | demand-only | 4 |
+| Dependency audit | Security | repo CI / tool-agent | TBD | 4 |
+
+---
+
+## Priority rules (support-agent planner)
+
+| Priority | When | On failure |
+|----------|------|------------|
+| **P0** | Auth, payments, PII, health smoke | Blocking |
+| **P1** | Changed domain in PR diff | Warning or blocking (policy) |
+| **P2** | Full regression, load, deep security | Release / scheduled only |
+
+Tag convention in catalog: `priority:P0`, or explicit `priority` field.
+
+---
+
+## Domain → specialist routing
+
+```text
+backend   ──► tool-agent     (tools.execute)
+network   ──► tool-agent     (tools.execute)
+spt       ──► tool-agent     (tools/spt/)
+verify    ──► tool-agent     (tools/observe/)
+frontend  ──► ui-test-agent  (ui.test.run)
+system    ──► support-agent  (orchestrated fan-out → both specialists)
 ```
-P0 — Must run on every relevant PR; failure blocks merge
-  - Auth, payments, data deletion
-  - Health of production-critical paths (in preview/staging)
-  - Breaking API contract changes
-
-P1 — Run when domain touched; failure warns
-  - Non-critical UI
-  - Secondary API endpoints
-  - Network latency regression
-
-P2 — Scheduled or release-only
-  - Full regression E2E suite
-  - Load tests
-  - Deep security scan
-```
 
 ---
 
-## Example: single PR, multiple domains
+## Environment matrix
 
-**Change:** Update checkout API + payment form + CDN hostname in terraform.
+| Environment | Backend | Frontend E2E | Network | SPT load |
+|-------------|---------|--------------|---------|----------|
+| PR preview | yes | yes | allowlist | no |
+| preprod | yes | yes | yes | limited |
+| staging | yes | yes | yes | yes |
+| production | read-only smoke | synthetic only | read-only | no |
+
+---
+
+## Partial failure (ADR-004 — applies to QA)
+
+| `failure_mode` | Behavior |
+|----------------|----------|
+| `continue` (default) | Other targets keep running |
+| `fail_fast` | Cancel pending after first hard fail |
+
+`skipped` (policy deny / disabled target) is not a hard fail.
+
+Notify and PR comment must show counts — never false all-green on partial.
+
+---
+
+## Example: one PR, multiple domains
+
+**Change:** payment API + checkout UI + CDN hostname.
 
 | Step | Agent | Action |
 |------|-------|--------|
-| 1 | Fin | Detect API + UI + infra; assign P0 backend, frontend, network |
-| 2 | Tool | `pytest tests/payments`; Playwright checkout spec |
-| 3 | Tool | `dig cdn.example.com`; TLS check |
-| 4 | Fin | Fail if E2E or TLS fails; pass with warning if latency +20% |
-| 5 | Orchestrator | Post combined report; label `qa:fail` or `qa:pass` |
+| 1 | support-agent | Selector `{ tags: [payments, checkout, network] }` |
+| 2 | tool-agent | API smoke + TLS probe |
+| 3 | ui-test-agent | checkout E2E spec |
+| 4 | support-agent | Verify + `QaRunSummary` |
+| 5 | am-pipelines | PR comment + label |
 
 ---
 
-## Environment targets
+## Out of scope
 
-| Environment | Backend | Frontend E2E | Network probes | Load |
-|-------------|---------|--------------|----------------|------|
-| Local / CI | ✅ | Mock or skip | Skip external | ❌ |
-| PR preview | ✅ | ✅ | Limited allowlist | ❌ |
-| Staging | ✅ | ✅ | Full declared hosts | ✅ |
-| Production | Read-only smoke | Synthetic only | Read-only | ❌ |
+| Item | Reason |
+|------|--------|
+| fin-agent portfolio tests | Separate product (`am-fin-agent`) |
+| Unbounded load on every PR | ADR-004 runaway guards |
+| Hardcoded service names in code | Use catalog only |
 
 ---
 
-## Glossary
+## References
 
-- **SPT** — Software Product Testing; org name for unified QA agent
-- **Smoke** — Minimal fast checks that services respond
-- **Synthetic** — Scripted user journey across services
-- **Verdict** — Final pass/fail from Fin Agent after Tool Agent completes
-
-Parent plan: [../PLAN.md](../PLAN.md)
+- [PLAN.md](../PLAN.md)
+- [catalog/README.md](../catalog/README.md)
+- [agents/support-agent.md](../agents/support-agent.md)

@@ -1,153 +1,117 @@
-# Tool Agent Specification
+# tool-agent — QA executor plan
 
-The **Tool Agent** executes tests. It receives a structured plan from the Fin Agent and runs commands, browsers, and network probes — collecting logs, screenshots, and metrics as evidence.
-
----
-
-## Responsibilities
-
-1. Parse `test-plan.json` and validate commands against an allowlist
-2. Execute cases in parallel where safe (unit tests) or sequentially (E2E)
-3. Capture stdout/stderr, HTTP responses, HAR, screenshots
-4. Enforce timeouts and resource limits
-5. Return `results.json` per case and upload artifacts
+**Canonical name:** `tool-agent`  
+**Path:** `am-agents/tool-agent/`  
+**Role in QA:** Execute backend, network, SPT (load), and observe/verify checks.
 
 ---
 
-## Domain playbooks
+## Purpose
 
-### Backend
+tool-agent is a **specialist executor**. support-agent calls it over HTTP; it does not orchestrate other agents.
 
-```bash
-# Examples — actual commands come from repo conventions
-pytest tests/ -q --tb=short
-npm test -- --runInBand
-go test ./... -count=1
-curl -sf "$PREVIEW_URL/health"
-newman run postman/collection.json -e preview.json
+Existing API: `discover` → `plan` → `execute` → `stream`  
+Default port: **8141** (from `registry/agents.yaml`)
+
+---
+
+## QA domains handled
+
+| Domain | tool-agent surface | Catalog source |
+|--------|-------------------|----------------|
+| Backend API smoke | `tools.execute` + sandbox curl/HTTP | `catalog/qa/backend/` |
+| Backend test suites | `tools.execute` (allowed commands) | `catalog/qa/backend/` |
+| Network (DNS, TLS, latency) | `tools.execute` | `catalog/qa/network/` |
+| Performance (SPT) | `tools/spt/` capability plugin | `catalog/spt/` |
+| Metrics / logs checks | `tools/observe/` | `catalog/verify/` |
+| Infra probes | grafana, vault, kafka, etc. | as needed |
+
+---
+
+## Existing plugins (reuse)
+
+```text
+tool-agent/tools/
+├── spt/           # load / perf scenarios
+├── observe/       # metrics + logs
+├── postgres/      # read-only queries
+├── redis/
+├── kafka/
+├── mongodb/
+├── qdrant/
+├── grafana/
+├── alert/
+└── ...
 ```
 
-**Validates:** status codes, JSON schema, auth headers, DB migrations (dry-run)
-
-### Frontend
-
-```bash
-npm run test:unit
-npx playwright test e2e/ --reporter=json
-# Optional: axe accessibility scan in Playwright afterEach
-```
-
-**Validates:** routing, forms, critical UI flows, console errors, basic a11y
-
-### System
-
-```bash
-# Health matrix — all services must respond
-for url in $SERVICE_URLS; do curl -sf "$url/health"; done
-
-# Synthetic script (repo-specific)
-node scripts/qa/synthetic-checkout.js
-```
-
-**Validates:** cross-service flows, feature flags, queue/worker connectivity
-
-### Network
-
-```bash
-dig +short "$HOST"
-openssl s_client -connect "$HOST:443" -servername "$HOST" </dev/null
-curl -w "%{time_connect} %{time_total}\n" -o /dev/null -s "$URL"
-traceroute -m 15 "$HOST"   # staging only, rate-limited
-```
-
-**Validates:** DNS, TLS expiry, latency SLOs, reachability from Cloud Agent egress
+Capability plugins for support-agent orchestration: `work-item`, `chat`, `mail`, `document`, `directory`, `observe`, `spt` — see `tool-agent/docs/CAPABILITY_PLUGINS.md`.
 
 ---
 
-## Tool allowlist (security)
+## Safety (existing — apply to QA)
 
-Only approved command prefixes may run:
-
-| Allowed | Blocked |
-|---------|---------|
-| `pytest`, `npm test`, `go test`, `playwright` | Arbitrary `rm`, `curl \| bash` |
-| `curl`, `dig`, `openssl` with fixed hosts | Scanning undeclared IP ranges |
-| `newman`, `k6` in staging | k6 against production |
-| Repo `scripts/qa/*` | Ad-hoc scripts outside allowlist |
-
-Hosts must appear in `test-plan.json` `allowed_hosts[]`.
+| Rule | Behavior |
+|------|----------|
+| Command allowlist | Only approved prefixes in sandbox |
+| Host allowlist | Declared in catalog / demand |
+| Writes blocked | Most adapters read-only by default |
+| Secrets | Vault / SecretBroker — never logged |
+| MCP | Optional per tool manifest |
 
 ---
 
-## Execution environment
+## QA catalog entry → execute (planned)
 
-| Context | Where Tool Agent runs |
-|---------|------------------------|
-| PR CI | GitHub Actions job with repo checkout |
-| Deep QA | Cursor Cloud Agent with tmux sessions |
-| Release | Staging cluster + dedicated QA runner |
+Example backend target (conceptual YAML):
 
-Cloud Agent notes:
-
-- Use tmux for long-running E2E and servers
-- Commit artifacts to run bundle path before finalize
-- Respect egress policy from environment config
-
----
-
-## Output format
-
-Per case:
-
-```json
-{
-  "case_id": "e2e-checkout",
-  "domain": "frontend",
-  "status": "failed",
-  "started_at": "2026-07-20T10:00:00Z",
-  "duration_ms": 45000,
-  "exit_code": 1,
-  "evidence": [
-    "artifacts/e2e-checkout/trace.zip",
-    "artifacts/e2e-checkout/screenshot.png"
-  ],
-  "error_summary": "Timeout waiting for #payment-success"
-}
+```yaml
+id: api-health-preview
+kind: backend
+enabled: true
+tags: [backend, smoke, preview]
+specialist: tool-agent
+capability: tools.execute
+params:
+  method: GET
+  url_secret_ref: preview-base-url
+  path: /health
+  expect_status: 200
 ```
 
----
-
-## Parallelism rules
-
-| Safe parallel | Sequential only |
-|---------------|-----------------|
-| Unit test shards | E2E sharing one browser profile |
-| Independent API probes | DB migration tests |
-| Lint + unit in different dirs | Load tests |
-
-Max concurrent jobs: **4** per run (configurable org-wide).
+support-agent passes resolved params; tool-agent executes inside sandbox.
 
 ---
 
-## Prompt principles (for Cloud / LLM agent)
+## SPT execution (exists)
 
-```
-You are the Tool Agent for AM Portfolio QA.
+- Catalog: `catalog/spt/services/`, `catalog/spt/flows/`
+- Schema: `catalog/spt/target.schema.json`
+- Selectors: ADR-004 (`ids`, `tags` only)
+- Runner: k6 via ToolSandbox
 
-- Execute only cases listed in test-plan.json.
-- Do not deviate from allowlisted commands.
-- On failure: capture maximum evidence before exiting.
-- On flaky failure: retry once for E2E/network only.
-- Never print secrets; redact Authorization headers in logs.
-- Report inconclusive if environment is unreachable.
-```
+QA plan does **not** duplicate SPT — it **routes** SPT targets to the same plugin.
 
 ---
 
-## Integration
+## What not to add
 
-- Triggered by Orchestrator after Fin Agent publishes `test-plan.json`
-- Results consumed by Fin Agent Finalize phase
-- Failed P0 cases block PR when branch protection + `qa:required` enabled
+- QA orchestration logic in tool-agent
+- New HTTP server for QA
+- Hardcoded service names in Python
 
-See [../PLAN.md](../PLAN.md) for orchestration flow.
+---
+
+## Tests to add (Phase 1–2)
+
+| Test | Type |
+|------|------|
+| QA backend smoke manifest executes | integration |
+| Network probe allowlist enforced | unit |
+| SPT plugin unchanged by QA work | regression |
+
+---
+
+## References
+
+- [tool-agent/docs/ADDING_A_TOOL.md](https://github.com/AM-Portfolio/am-agents/blob/main/tool-agent/docs/ADDING_A_TOOL.md)
+- [ADR-004 SPT catalog](https://github.com/AM-Portfolio/am-agents/blob/main/docs/agent-platform/decisions/ADR-004-spt-catalog-selectors.md)

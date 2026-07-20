@@ -1,31 +1,61 @@
-# SPT / QA Agent
+# SPT / QA Agent — Keep Plan (Review Draft)
 
-Organization-wide plan for an **SPT (Software Product Testing) / QA agent** that runs backend, frontend, system, and network testing through specialized sub-agents.
+Planning package for full-stack QA and SPT testing inside the **AM-Portfolio agent ecosystem**.
 
-## Contents
+**Implementation home:** `AM-Portfolio/am-agents` (not this `.github` repo).  
+**This folder:** review-only keep plan — no code, no workflows.
 
-| Document | Purpose |
-|----------|---------|
-| [PLAN.md](./PLAN.md) | Master keep plan: goals, architecture, phases, and operating model |
-| [agents/tool-agent.md](./agents/tool-agent.md) | Tool Agent: executes tests and collects evidence |
-| [agents/fin-agent.md](./agents/fin-agent.md) | Fin Agent: finds scope and produces final QA verdict |
-| [testing-domains/overview.md](./testing-domains/overview.md) | Coverage map across all testing types |
+---
 
-## Quick summary
+## Start here
+
+| Document | Read for |
+|----------|----------|
+| [PLAN.md](./PLAN.md) | Master strategy, agent roles, phases, safety |
+| [FOLDER_STRUCTURE.md](./FOLDER_STRUCTURE.md) | Target folder layout aligned with `am-agents` |
+| [ALIGNMENT.md](./ALIGNMENT.md) | Mapping to existing `support-agent`, `tool-agent`, `ui-test-agent` |
+
+---
+
+## Agent model (aligned with `am-agents`)
 
 ```
-User / PR / CI trigger
-        │
-        ▼
-   SPT / QA Orchestrator
-    ┌───┴───┐
-    │       │
-Fin Agent  Tool Agent
-(find)     (execute)
-    │       │
-    └───┬───┘
-        ▼
-   Unified QA report
+Trigger (PR / SPT demand / /qa)
+           │
+           ▼
+    support-agent          ← orchestrator (plan, route, verify, report)
+     ┌─────┼─────┐
+     │     │     │
+tool-agent  ui-test-agent  db-agent (optional)
+(execute)   (frontend E2E)  (data checks)
+     │     │
+     └─────┘
+           ▼
+    RunStore + QA verdict
 ```
 
-Start with [PLAN.md](./PLAN.md) for the full strategy.
+**Note:** `fin-agent` (`am-fin-agent`) is the **finance product agent** — it is **not** part of this QA plan.
+
+---
+
+## Folder index
+
+```
+spt-qa-agent/
+├── PLAN.md
+├── FOLDER_STRUCTURE.md
+├── ALIGNMENT.md
+├── phases/PHASES.md
+├── agents/
+│   ├── support-agent.md
+│   ├── tool-agent.md
+│   └── ui-test-agent.md
+├── catalog/README.md
+├── contracts/README.md
+├── registry/agents.yaml.example
+└── testing-domains/overview.md
+```
+
+---
+
+*Status: Draft for review · Owner: AM-Portfolio Infrastructure Team · Updated: 2026-07-20*

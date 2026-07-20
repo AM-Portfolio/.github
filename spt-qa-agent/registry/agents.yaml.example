@@ -1,0 +1,60 @@
+# Example registry excerpt — QA routing reference
+# Full file lives in am-agents/support-agent/registry/agents.yaml
+# This is plan-only; not deployed from .github repo.
+
+version: 1
+
+platform:
+  agent_id: support-agent
+  display_name: Support Agent
+
+defaults:
+  prefer: tool-agent
+  budgets:
+    max_fanout: 8
+    max_latency_ms: 120000
+    max_cost_units: 100
+
+agents:
+  - agent_id: tool-agent
+    display_name: Tool Agent
+    base_url_env: TOOL_AGENT_BASE_URL
+    default_base_url: http://127.0.0.1:8141
+    preferred: true
+    health_path: /health
+    ready_path: /ready
+    capabilities:
+      - id: tools.plan
+        ops: [discover, plan, execute, stream]
+      - id: tools.execute
+        ops: [discover, plan, execute, stream]
+      - id: tools.query
+        ops: [discover, execute, stream]
+    # QA routes: backend, network, spt, verify/observe
+
+  - agent_id: ui-test-agent
+    display_name: UI Test Agent
+    base_url_env: UI_TEST_AGENT_BASE_URL
+    default_base_url: http://127.0.0.1:8130
+    preferred: true
+    health_path: /health
+    capabilities:
+      - id: ui.test.run
+        ops: [discover, plan, execute, status, stream]
+      - id: ui.test.report
+        ops: [discover, status]
+    # QA routes: frontend, e2e, visual baseline
+
+  - agent_id: db-agent
+    display_name: DB Agent
+    base_url_env: DB_AGENT_BASE_URL
+    default_base_url: http://127.0.0.1:8140
+    preferred: false
+    tags: [legacy.db-agent]
+    capabilities:
+      - id: db.execute
+        ops: [discover, plan, execute]
+    # QA routes: optional data validation only
+
+# QA catalog target.specialist must match agent_id above.
+# fin-agent is NOT registered here — finance is a separate product surface.

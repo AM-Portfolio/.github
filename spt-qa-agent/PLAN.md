@@ -1,124 +1,58 @@
 # SPT / QA Agent — Keep Plan
 
-> **Status:** Draft plan (keep document)  
+> **Status:** Draft — for review  
 > **Owner:** AM-Portfolio Infrastructure Team  
+> **Implementation repo:** `AM-Portfolio/am-agents`  
 > **Last updated:** 2026-07-20
 
-This document is the living plan for building an **SPT / QA agent** that performs all major testing categories — backend, frontend, system, network, security, performance, and regression — by orchestrating two specialized sub-agents:
+---
 
-1. **Fin Agent** — *Find + Finalize*: discovers what to test and produces the final QA verdict.
-2. **Tool Agent** — *Execute*: runs concrete tests using tools, scripts, and CI integrations.
+## 1. Purpose
+
+Define how AM-Portfolio runs **all major testing** — backend, frontend, system, network, performance (SPT), and regression — using the existing agent platform:
+
+| Agent | Role in QA |
+|-------|------------|
+| **support-agent** | Orchestrator — scope, route, verify, final verdict |
+| **tool-agent** | Execute backend, network, load (SPT), infra probes |
+| **ui-test-agent** | Execute frontend / UI E2E (Playwright) |
+| **db-agent** | Optional data-layer checks during incidents |
+
+This plan **extends** what already exists in `am-agents`. It does **not** introduce a parallel orchestrator or duplicate specialist agents.
+
+> **Naming:** `fin-agent` (`am-fin-agent`) is the end-user **finance** agent. It is out of scope for QA/SPT unless a finance UI regression is explicitly in the test catalog.
 
 ---
 
-## 1. Problem statement
+## 2. Problem
 
-Today, testing is fragmented:
-
-- Backend tests live in one pipeline; E2E in another.
-- Network and infra checks are manual or ad hoc.
-- PR review (Gemini PR Agent) catches code issues but does not **execute** tests or validate runtime behavior across the full stack.
-
-We need one **QA orchestrator** that can be triggered from PRs, releases, or on-demand, and that delegates work to agents with clear roles.
+| Gap today | Impact |
+|-----------|--------|
+| PR Agent reviews code but does not run tests | Runtime bugs slip through |
+| SPT catalog + workflow exist but focus on load/perf | Full QA matrix not unified |
+| ui-test-agent, tool-agent, support-agent are separate | No single PR-triggered QA verdict |
+| Tests scattered across repos and CI jobs | Hard to know what ran and what blocked merge |
 
 ---
 
-## 2. Goals
+## 3. Goals
 
 | Goal | Success criteria |
 |------|------------------|
-| **Full-stack coverage** | Backend API, frontend UI, system integration, network/connectivity |
-| **Agent-driven execution** | Fin Agent scopes work; Tool Agent runs tools; orchestrator coordinates |
-| **Actionable output** | Pass/fail, evidence (logs, screenshots, traces), linked to PR or release |
-| **Safe by default** | Read-only discovery first; destructive tests only in approved environments |
-| **Composable** | Works with existing `am-pipelines`, Cloud Agents, and org secrets |
+| Unified QA orchestration | One demand → one verdict via support-agent |
+| Reuse existing specialists | No new tool-agent or ui-test-agent forks |
+| Full-stack coverage | Backend, frontend, system, network, SPT |
+| Catalog-driven | Targets in `catalog/` — code never hardcodes service names (ADR-004) |
+| Safe by default | Sandbox, selectors, max fan-out, no prod writes |
+| Observable | RunStore steps, traces, evidence artifacts |
+| PR-friendly | Optional trigger from `am-pipelines`; labels `qa:pass` / `qa:fail` |
 
 ### Non-goals (phase 1)
 
-- Replacing human QA sign-off for production releases
-- Running unbounded load tests on every PR
-- Auto-merging based on QA agent results
-
----
-
-## 3. Agent roles
-
-### 3.1 SPT / QA Orchestrator (parent agent)
-
-The top-level agent receives a trigger (PR opened, `/qa` command, scheduled run) and:
-
-1. Loads repo context (changed files, env, deployment URL).
-2. Invokes **Fin Agent** to build a test plan.
-3. Dispatches **Tool Agent** jobs (parallel where safe).
-4. Aggregates results into a single QA report.
-5. Posts results to PR comment, issue, or dashboard.
-
-### 3.2 Fin Agent — Find + Finalize
-
-**Find (discovery phase)**
-
-- Map changed code to test surfaces (API routes, UI pages, DB migrations, infra configs).
-- Identify dependencies: services, ports, env vars, external APIs.
-- Propose a **test matrix**: which domains apply, priority, and risk level.
-- Flag gaps (e.g. "no frontend tests for changed component").
-
-**Finalize (reporting phase)**
-
-- Merge Tool Agent outputs into one structured verdict.
-- Classify: blocking vs non-blocking findings.
-- Recommend next actions (fix, retest, escalate).
-- Attach evidence links and reproduction steps.
-
-**Tools Fin Agent uses (read-heavy)**
-
-- Code search / AST / diff analysis
-- OpenAPI / GraphQL schema discovery
-- Route and component inventory
-- Dependency and env manifest parsing
-- Prior run history (flaky test detection)
-
-### 3.3 Tool Agent — Execute
-
-Runs actual tests and collects artifacts.
-
-**Backend**
-
-- Unit / integration: `pytest`, `jest`, `go test`, etc.
-- API contract: schema validation, status codes, auth flows
-- DB: migration dry-run, seed sanity checks
-
-**Frontend**
-
-- Component / unit tests
-- E2E: Playwright / Cypress against preview or staging URL
-- Visual regression (optional phase 2)
-- Accessibility smoke (axe)
-
-**System**
-
-- Multi-service flows (login → checkout → webhook)
-- Health checks across services
-- Config and feature-flag consistency
-- Container / k8s readiness (where applicable)
-
-**Network**
-
-- DNS resolution, TLS cert validity
-- Port reachability, latency thresholds
-- Firewall / egress policy checks (align with Cloud Agent egress rules)
-- Webhook delivery and retry behavior
-- CDN / load balancer header checks
-
-**Tool Agent toolbelt (examples)**
-
-| Category | Tools |
-|----------|-------|
-| HTTP/API | `curl`, `httpx`, Postman/Newman, REST Client |
-| Browser | Playwright, Puppeteer |
-| Load | k6, Locust (staging only) |
-| Network | `dig`, `openssl s_client`, `nc`, `traceroute` |
-| Security smoke | OWASP ZAP baseline, dependency audit |
-| Infra | `kubectl`, health endpoints, smoke scripts |
+- Replacing human release sign-off
+- Load test every PR
+- Auto-merge on QA pass
+- Building a new agent monorepo
 
 ---
 
@@ -128,285 +62,237 @@ Runs actual tests and collects artifacts.
 flowchart TB
     subgraph triggers [Triggers]
         PR[PR / synchronize]
-        CMD["/qa command"]
-        CRON[Scheduled QA]
-        REL[Release gate]
+        SPT[SPT demand selector]
+        CMD["/qa comment"]
     end
 
-    subgraph orchestrator [SPT / QA Orchestrator]
-        O1[Load context]
-        O2[Coordinate agents]
-        O3[Publish report]
+    subgraph sa [support-agent]
+        P[Planner / scope]
+        R[Router]
+        V[Verification]
+        RS[RunStore]
     end
 
-    subgraph fin [Fin Agent]
-        F1[Discover scope]
-        F2[Build test matrix]
-        F3[Finalize verdict]
+    subgraph specialists [Specialists]
+        TA[tool-agent]
+        UI[ui-test-agent]
+        DB[db-agent]
     end
 
-    subgraph tool [Tool Agent]
-        T1[Backend tests]
-        T2[Frontend tests]
-        T3[System tests]
-        T4[Network tests]
+    subgraph catalog [catalog/]
+        SPTC[spt/]
+        QA[qa/ planned]
+        VER[verify/]
     end
 
-    subgraph outputs [Outputs]
-        R1[PR comment]
-        R2[QA artifact bundle]
-        R3[Status checks / labels]
-    end
-
-    triggers --> O1
-    O1 --> F1
-    F1 --> F2
-    F2 --> T1 & T2 & T3 & T4
-    T1 & T2 & T3 & T4 --> F3
-    F3 --> O2
-    O2 --> O3
-    O3 --> R1 & R2 & R3
+    triggers --> P
+    catalog --> P
+    P --> R
+    R --> TA & UI & DB
+    TA & UI & DB --> V
+    V --> RS
+    RS --> OUT[Verdict + notify + PR comment]
 ```
 
-### Execution model
+### Request flow
 
-| Step | Agent | Output |
-|------|-------|--------|
-| 1 | Orchestrator | Run ID, repo ref, target environment |
-| 2 | Fin Agent | `test-plan.json` — domains, cases, priorities |
-| 3 | Tool Agent (×N) | Per-domain `results.json` + artifacts |
-| 4 | Fin Agent | `qa-verdict.json` — pass/fail, findings |
-| 5 | Orchestrator | Human-readable report + CI status |
-
----
-
-## 5. Testing domains (coverage map)
-
-| Domain | What we validate | Typical Tool Agent actions |
-|--------|------------------|----------------------------|
-| **Backend** | APIs, auth, business logic, DB | Run test suites; hit endpoints; validate schemas |
-| **Frontend** | UI flows, routing, forms, a11y | Playwright scenarios; unit test run |
-| **System** | End-to-end cross-service behavior | Synthetic user journeys; health aggregation |
-| **Network** | Connectivity, TLS, DNS, latency | Probe endpoints; cert checks; traceroute |
-| **Security** (phase 2) | OWASP basics, secrets in diff | ZAP baseline; secret scan |
-| **Performance** (phase 2) | SLOs under load | k6 on staging |
-
-Detailed breakdown: [testing-domains/overview.md](./testing-domains/overview.md).
+1. **Trigger** — PR event, `SptDemandRequest`, or `/qa` command.
+2. **Scope** — support-agent planner reads diff + `catalog/qa/` + `catalog/spt/` + `catalog/verify/`.
+3. **Resolve** — selector expands to target set (ADR-004: empty selector = fatal).
+4. **Route** — map each target to specialist via `registry/agents.yaml`.
+5. **Execute** — specialists run plan/execute; bounded parallelism (`max_fanout: 8`).
+6. **Verify** — support-agent intelligence merges results; applies `failure_mode` (`continue` / `fail_fast`).
+7. **Report** — RunStore summary, PR comment, optional Cliq/Grafana notify.
 
 ---
 
-## 6. Triggers and integration
+## 5. Agent responsibilities
 
-### 6.1 PR workflow (recommended first)
+Detailed specs:
 
-Extend the org pattern used by the Gemini PR Agent:
+- [agents/support-agent.md](./agents/support-agent.md) — orchestrator
+- [agents/tool-agent.md](./agents/tool-agent.md) — backend, network, SPT
+- [agents/ui-test-agent.md](./agents/ui-test-agent.md) — frontend E2E
 
-```yaml
-# Future: .github/workflows/spt-qa-agent.yml
-on:
-  pull_request:
-    types: [opened, synchronize, ready_for_review]
-  issue_comment:
-    types: [created]  # /qa, /qa backend, /qa full
+### 5.1 support-agent (orchestrator)
+
+- Owns `SptRunWorkflow` and future `QaRunWorkflow` (or extend SPT workflow with `kind: qa`)
+- Reads catalogs; never embeds service names in workflow code
+- Calls specialists over HTTP (A2A / capability contract)
+- Writes RunStore (`kind=spt` or `kind=qa`)
+- Produces final `overall_status`: `succeeded` | `partial` | `failed` | `gated`
+
+### 5.2 tool-agent (executor)
+
+- Backend: API smoke, contract checks, repo test commands via sandbox
+- Network: DNS, TLS, latency probes (declared hosts only)
+- SPT: k6 / load scenarios via existing `tools/spt` capability plugin
+- Observe: metrics/logs checks via `tools/observe` + `catalog/verify/`
+
+### 5.3 ui-test-agent (frontend executor)
+
+- Playwright E2E against preview / preprod URL
+- Baseline compare, design review, auth flows
+- Returns screenshots, traces, report JSON
+
+### 5.4 db-agent (optional)
+
+- Read-only queries during QA incidents or data validation steps
+- Not on every PR by default
+
+---
+
+## 6. Catalog plan
+
+| Path | Purpose | Status in am-agents |
+|------|---------|---------------------|
+| `catalog/spt/` | Perf/load targets (services + flows) | **Exists** |
+| `catalog/verify/` | Health / metrics / log check templates | **Exists** |
+| `catalog/qa/` | QA test matrix by domain | **Planned** |
+| `catalog/prompts/` | Prompt bodies (not in Python) | **Exists** |
+
+### Planned `catalog/qa/` shape
+
+```text
+catalog/qa/
+├── backend/          # API smoke refs, pytest entrypoints
+├── frontend/         # ui-test-agent scenario refs
+├── system/           # multi-step journey refs
+├── network/          # probe refs (host allowlist keys)
+└── selectors.schema.json
 ```
 
-- Reuse secrets: `GOOGLE_API_KEY`, `GH_TOKEN`
-- Call reusable workflow in `am-pipelines` (mirror `reusable-pr-agent.yml`)
-- Post QA summary as PR comment; apply labels: `qa:pass`, `qa:fail`, `qa:partial`
+Selectors follow ADR-004: `{ "ids": [...], "tags": [...] }` only — no implicit run-all.
 
-### 6.2 Cloud Agent run
-
-For deep system/network runs:
-
-- Spin Cloud Agent with egress policy matching target environment
-- Fin Agent explores repo; Tool Agent runs in isolated tmux sessions
-- Artifacts uploaded to run bundle (screenshots, HAR, logs)
-
-### 6.3 Manual commands
-
-| Command | Behavior |
-|---------|----------|
-| `/qa` | Full matrix from Fin Agent on changed files |
-| `/qa backend` | Backend + API only |
-| `/qa frontend` | Frontend + E2E only |
-| `/qa network` | Network probes against declared URLs |
-| `/qa retest` | Re-run last failed cases only |
+See [catalog/README.md](./catalog/README.md).
 
 ---
 
-## 7. Data contracts
+## 7. Testing domains
 
-### 7.1 Test plan (Fin Agent → Tool Agent)
+| Domain | Specialist | Catalog | Examples |
+|--------|------------|---------|----------|
+| Backend | tool-agent | `catalog/qa/backend/` | pytest, API contract, auth |
+| Frontend | ui-test-agent | `catalog/qa/frontend/` | Playwright E2E, a11y smoke |
+| System | support-agent fan-out | `catalog/qa/system/` | checkout → webhook journey |
+| Network | tool-agent | `catalog/qa/network/` | DNS, TLS, latency |
+| Performance (SPT) | tool-agent | `catalog/spt/` | k6, load policy |
+| Verify | tool-agent + observe | `catalog/verify/` | health, metrics, logs |
 
-```json
-{
-  "run_id": "qa-20260720-abc123",
-  "repo": "org/service-api",
-  "ref": "feature/checkout-v2",
-  "environment": "preview",
-  "domains": [
-    {
-      "name": "backend",
-      "priority": "P0",
-      "cases": [
-        { "id": "api-health", "command": "curl -f https://preview/health" },
-        { "id": "pytest-unit", "command": "pytest tests/unit -q" }
-      ]
-    },
-    {
-      "name": "frontend",
-      "priority": "P1",
-      "cases": [
-        { "id": "e2e-checkout", "tool": "playwright", "spec": "e2e/checkout.spec.ts" }
-      ]
-    }
-  ]
-}
-```
-
-### 7.2 Result bundle (Tool Agent → Fin Agent)
-
-```json
-{
-  "case_id": "api-health",
-  "status": "passed",
-  "duration_ms": 120,
-  "evidence": ["logs/health-response.json"],
-  "metrics": { "latency_ms": 45 }
-}
-```
-
-### 7.3 QA verdict (Fin Agent → Orchestrator)
-
-```json
-{
-  "verdict": "fail",
-  "blocking_count": 1,
-  "summary": "Checkout E2E failed: payment webhook timeout",
-  "domains": {
-    "backend": "pass",
-    "frontend": "fail",
-    "system": "fail",
-    "network": "pass"
-  },
-  "findings": [
-    {
-      "severity": "blocking",
-      "domain": "system",
-      "title": "Webhook timeout",
-      "reproduction": "Run e2e/checkout.spec.ts against preview"
-    }
-  ]
-}
-```
+Full matrix: [testing-domains/overview.md](./testing-domains/overview.md).
 
 ---
 
-## 8. Phased rollout
+## 8. Data contracts
 
-### Phase 0 — Plan and scaffolding (current)
+See [contracts/README.md](./contracts/README.md).
 
-- [x] Keep plan document (this file)
-- [ ] Agent prompt specs for Fin and Tool agents
-- [ ] JSON schemas for plan / results / verdict
-- [ ] Decision on model(s) and `am-pipelines` reusable workflow
+| Artifact | Producer | Consumer |
+|----------|----------|----------|
+| `SptDemandRequest` / `QaDemandRequest` | Gateway / PR trigger | support-agent workflow |
+| `TargetSet` | TargetResolver | Router |
+| `ChildRunResult` | Specialists | support-agent verify |
+| `SptRunSummary` / `QaRunSummary` | support-agent | RunStore, notify, PR comment |
 
-### Phase 1 — Backend + smoke (4–6 weeks engineering)
-
-- Fin Agent: diff → API test list
-- Tool Agent: run existing unit/integration suites in CI
-- PR comment with pass/fail summary
-- Labels on PR
-
-### Phase 2 — Frontend E2E
-
-- Preview URL discovery from PR deployments
-- Playwright via Tool Agent
-- Screenshot artifacts on failure
-
-### Phase 3 — System + network
-
-- Multi-service health matrix
-- TLS/DNS/latency probes from Cloud Agent
-- Synthetic journey scripts per product
-
-### Phase 4 — Intelligence
-
-- Flaky test tracking
-- Risk-based test selection (only high-impact paths on small diffs)
-- Trend dashboard across repos
+Reuse `am_platform_ports` schemas where possible — do not fork DTOs.
 
 ---
 
-## 9. Safety and governance
+## 9. Triggers
 
-| Rule | Rationale |
-|------|-----------|
-| **No prod writes from QA agent** | Tool Agent uses read-only or staging credentials |
-| **Network scans scoped** | Only declared hosts; respect egress allowlists |
-| **Secrets never in logs** | Redact tokens in evidence bundles |
-| **Human override** | `qa:waived` label requires approver role |
-| **Rate limits** | Cap parallel Tool Agent jobs per org |
+| Trigger | Entry point | Phase |
+|---------|-------------|-------|
+| SPT demand (selector) | support-agent `SptRunWorkflow` | **Exists** (gated until parity on) |
+| PR opened / sync | `am-pipelines` reusable workflow → support-agent | Phase 2 |
+| `/qa`, `/qa backend`, `/qa full` | PR comment handler | Phase 2 |
+| Release gate | Manual workflow dispatch | Phase 3 |
+| Scheduled regression | Cron → support-agent | Phase 4 |
 
----
-
-## 10. Operating model
-
-### When to run what
-
-| Event | Fin Agent scope | Tool Agent depth |
-|-------|-----------------|------------------|
-| Small doc PR | Minimal / skip | Lint only |
-| API change | Backend P0 | Full API + unit |
-| UI change | Frontend P0 | Unit + targeted E2E |
-| Infra / DNS change | Network P0 | Probes + system smoke |
-| Release candidate | Full matrix | Full regression + staging load |
-
-### Escalation
-
-1. **Blocking fail** → PR cannot merge (if branch protection enabled)
-2. **Flaky fail** → Fin Agent marks `investigate`; does not block until confirmed
-3. **Environment down** → Verdict `inconclusive`; retry policy applies
+PR integration stays in `am-pipelines` (same pattern as Gemini PR Agent in `.github`).
 
 ---
 
-## 11. Success metrics
+## 10. Phased rollout
 
-- **Coverage:** % of PRs with automated QA run
-- **Signal:** % of post-merge incidents that QA agent would have caught
-- **Latency:** median QA run time per PR
-- **Noise:** false positive rate (target < 5%)
-- **Adoption:** repos opted in vs org total
+See [phases/PHASES.md](./phases/PHASES.md).
+
+| Phase | Deliverable |
+|-------|-------------|
+| **0** | This keep plan + review sign-off |
+| **1** | `catalog/qa/` schema + sample entries; document registry routing |
+| **2** | Extend support-agent workflow for QA demand; PR trigger via am-pipelines |
+| **3** | System + network catalog entries; verify loop with `catalog/verify/` |
+| **4** | Flaky detection, risk-based selection, dashboard from RunStore |
 
 ---
 
-## 12. Open decisions
+## 11. Safety and governance
+
+| Rule | Source |
+|------|--------|
+| Empty selector = fatal | ADR-004 |
+| `SPT_MAX_TARGETS_PER_RUN` default 20 (prod 5) | ADR-004 |
+| Secrets via SecretBroker only — never in RunStore / LLM | ADR-002 |
+| Sandbox for tool-agent writes | Existing tool-agent safety |
+| `failure_mode: continue` default — partial-safe | ADR-004 |
+| Human waiver label `qa:waived` for override | New policy (TBD) |
+
+---
+
+## 12. Observability
+
+Reuse support-agent observability (already implemented):
+
+- Prometheus: `support_agent_*` metrics
+- OTLP traces → Tempo
+- RunStore: `agent_runs` + `agent_run_steps` (Postgres)
+- Evidence: MinIO / artifact refs on failure
+
+Business labels: `business_domain`, `outcome`, `automation_mode` — no free-text in metric labels.
+
+---
+
+## 13. Open decisions (for review)
 
 | # | Question | Options |
 |---|----------|---------|
-| 1 | Primary model for orchestrator | Gemini 1.5 Flash (align with PR agent) vs mixed |
-| 2 | Fin Agent naming | Keep "Fin" (Find+Finalize) vs rename to "Scope Agent" |
-| 3 | Blocking policy | Org-wide required vs per-repo opt-in |
-| 4 | Preview URL source | Vercel/Netlify comments vs custom deployment API |
-| 5 | am-pipelines location | New `reusable-spt-qa-agent.yml` vs extend PR agent |
+| 1 | Separate `QaRunWorkflow` vs extend `SptRunWorkflow` | A) extend with `kind` field · B) new workflow |
+| 2 | Where `catalog/qa/` lives | A) `am-agents/catalog/qa/` · B) per-repo catalog PR |
+| 3 | PR blocking policy | A) org opt-in · B) per-repo · C) advisory only |
+| 4 | Preview URL discovery | Vercel comment · deployment API · manual in demand |
+| 5 | When to enable `SUPPORT_AGENT_SPT_PARITY` | Staging cutover date TBD |
 
 ---
 
-## 13. Related docs
+## 14. Success metrics
 
-- [agents/tool-agent.md](./agents/tool-agent.md)
-- [agents/fin-agent.md](./agents/fin-agent.md)
-- [testing-domains/overview.md](./testing-domains/overview.md)
-- Org PR Agent: [README.md](../README.md)
+- % PRs with QA run executed
+- Median QA run duration
+- False positive rate (target < 5%)
+- Post-merge incidents catchable by QA catalog
+- Partial-run accuracy (no false all-green — ADR-004)
 
 ---
 
-## 14. Next actions
+## 15. Related repos and docs
 
-1. Review and approve this keep plan with infra + QA leads.
-2. Add JSON schemas under `spt-qa-agent/schemas/`.
-3. Prototype Fin Agent prompt against one pilot repo.
-4. Implement Phase 1 reusable workflow in `am-pipelines`.
-5. Document `/qa` commands in org contributing guide.
+| Resource | Link |
+|----------|------|
+| am-agents folder SoT | `docs/agent-platform/FOLDER_STRUCTURE.md` |
+| SPT ADR | `docs/agent-platform/decisions/ADR-004-spt-catalog-selectors.md` |
+| support-agent module | `support-agent/README.md` |
+| ui-test-agent | `ui-test-agent/README.md` |
+| PR Agent (this org) | `.github/workflows/pr-agent.yml` |
 
-*This is a keep plan — update it as phases complete and decisions close.*
+---
+
+## 16. Review checklist
+
+- [ ] Agent roles match `am-agents` (no duplicate orchestrator)
+- [ ] `fin-agent` excluded from QA scope (finance product only)
+- [ ] Catalog + selector model acceptable (ADR-004)
+- [ ] Phase order and scope approved
+- [ ] Open decisions resolved
+- [ ] Plan moved to `am-agents/docs/` after approval
+
+*Keep plan — update after review feedback.*
